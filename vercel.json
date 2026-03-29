@@ -1,12 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "index.html", "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/sw.js", "dest": "/sw.js" },
-    { "src": "/manifest.json", "dest": "/manifest.json" },
-    { "src": "/icons/(.*)", "dest": "/icons/$1" },
-    { "src": "/(.*)", "dest": "/index.html" }
-  ]
+  "cleanUrls": true,
+  "trailingSlash": false
 }
