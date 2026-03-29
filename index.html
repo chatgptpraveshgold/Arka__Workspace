@@ -1,0 +1,3151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ARKA Workspace</title>
+<!-- PWA -->
+<meta name="theme-color" content="#1A73E8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ARKA">
+<meta name="description" content="ARKA Workspace — role-based team management">
+<link rel="manifest" href="/manifest.json">
+<!-- Apple touch icons -->
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-192.png">
+<!-- Service Worker registration -->
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load',()=>{
+      navigator.serviceWorker.register('/sw.js')
+        .then(r=>console.log('SW registered:',r.scope))
+        .catch(e=>console.warn('SW failed:',e));
+    });
+  }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>window.lucide=window.lucide||{createIcons:function(){},icons:{}};</script>
+<!-- NEW: SheetJS for Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- NEW: jsPDF for PDF export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* ── RESET ─────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  /* Colors */
+  --bg:#F7F8FC;--surf:#FFFFFF;--sc:#F2F4FA;--sch:#EAECF5;
+  --out:#D0D2DE;--ov:#E6E8F0;
+  --on:#16171C;--ov2:#3F4150;--om:#787B88;
+  --pri:#2563EB;--pc:#DBEAFE;--opc:#1E3A8A;
+  --grn:#16A34A;--gc:#DCFCE7;
+  --amb:#D97706;--ac:#FEF3C7;
+  --red:#DC2626;--rc:#FEE2E2;
+  --pur:#7C3AED;--puc:#EDE9FE;
+  --teal:#0891B2;--tc:#CFFAFE;
+  /* Spacing */
+  --r:12px;--rm:16px;--rl:20px;--rx:32px;
+  /* Shadows */
+  --e1:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --e2:0 4px 12px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.05);
+  --e3:0 10px 28px rgba(0,0,0,.10),0 4px 8px rgba(0,0,0,.06);
+  --e4:0 20px 48px rgba(0,0,0,.14),0 8px 16px rgba(0,0,0,.08);
+  /* Transitions */
+  --tr:.16s cubic-bezier(.4,0,.2,1);
+  /* Typography */
+  --f:'Google Sans','Roboto',sans-serif;
+  --mono:'Roboto Mono',monospace;
+  /* Layout */
+  --bnav:64px;--th:56px;--sb:260px;
+}
+
+/* ── BASE ───────────────────────────────────── */
+html{
+  height:100%;height:-webkit-fill-available;
+  -webkit-text-size-adjust:100%;
+}
+body{
+  min-height:100vh;min-height:-webkit-fill-available;
+  font-family:var(--f);font-size:15px;color:var(--on);
+  background:var(--bg);line-height:1.5;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;overscroll-behavior:none;
+}
+input,select,textarea,button{font-family:var(--f)}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-thumb{background:var(--out);border-radius:99px}
+::-webkit-scrollbar-track{background:transparent}
+.hidden{display:none!important}
+
+/* ── SPLASH / LOADING ───────────────────────── */
+#ls{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--surf);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
+}
+.ls-brand{display:flex;align-items:center;gap:12px}
+.ls-icon{width:52px;height:52px;background:var(--pri);border-radius:16px;display:flex;align-items:center;justify-content:center}
+.ls-name{font-size:26px;font-weight:700;letter-spacing:-.5px;color:var(--on)}
+.ls-name b{color:var(--pri)}
+.ring{width:36px;height:36px}
+.ring circle{fill:none;stroke:var(--pc);stroke-width:3}
+.ring .arc{stroke:var(--pri);stroke-dasharray:55 100;animation:rspin 1.1s linear infinite}
+@keyframes rspin{to{stroke-dashoffset:-100}}
+
+/* ── TOAST ──────────────────────────────────── */
+#tw{
+  position:fixed;bottom:calc(var(--bnav) + 12px);left:16px;right:16px;
+  z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;
+  pointer-events:none;
+}
+.toast{
+  width:100%;max-width:400px;
+  background:rgba(22,23,28,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  color:#fff;padding:13px 16px;border-radius:14px;
+  font-size:14px;font-weight:500;box-shadow:var(--e3);
+  opacity:0;transform:translateY(6px) scale(.97);
+  transition:all .22s cubic-bezier(.34,1.2,.64,1);
+  display:flex;align-items:center;gap:10px;pointer-events:all;
+}
+.toast.show{opacity:1;transform:none}
+.tdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.t-ok .tdot{background:#4ADE80}.t-err .tdot{background:#F87171}
+.t-warn .tdot{background:#FBBF24}.t-info .tdot{background:#60A5FA}
+
+/* ── LOGIN PAGE ─────────────────────────────── */
+#lp{
+  position:fixed;inset:0;z-index:800;
+  background:var(--bg);
+  display:flex;flex-direction:column;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+.lcard{
+  width:100%;max-width:420px;
+  margin:auto;
+  background:var(--surf);
+  display:flex;flex-direction:column;
+  min-height:100vh;min-height:-webkit-fill-available;
+}
+/* Blue hero top */
+.lleft{
+  background:linear-gradient(145deg,#1D4ED8 0%,#2563EB 50%,#3B82F6 100%);
+  padding:max(env(safe-area-inset-top,0px),52px) 28px 40px;
+  position:relative;overflow:hidden;color:#fff;flex-shrink:0;
+}
+.lleft::before{content:'';position:absolute;top:-80px;right:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.06)}
+.lleft::after{content:'';position:absolute;bottom:-100px;left:-50px;width:280px;height:280px;border-radius:50%;background:rgba(255,255,255,.04)}
+.ll-logo{display:flex;align-items:center;gap:12px;position:relative;z-index:1;margin-bottom:20px}
+.ll-logo-box{width:48px;height:48px;background:rgba(255,255,255,.18);border-radius:14px;display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.25);backdrop-filter:blur(8px)}
+.ll-logo-name{font-size:28px;font-weight:700;letter-spacing:-.5px}
+.ll-tagline{font-size:16px;font-weight:500;opacity:.85;line-height:1.5;position:relative;z-index:1;max-width:260px}
+.ll-chips{display:none;flex-direction:column;gap:8px;position:relative;z-index:1;margin-top:20px}
+.ll-chip{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:10px 14px;font-size:13px}
+.ll-chip-ic{width:28px;height:28px;background:rgba(255,255,255,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+/* Form area */
+.lright{padding:28px 28px max(28px,env(safe-area-inset-bottom));display:flex;flex-direction:column;flex:1}
+.lr-eyebrow{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--pri);margin-bottom:6px}
+.lr-h{font-size:24px;font-weight:700;color:var(--on);margin-bottom:4px;letter-spacing:-.3px}
+.lr-s{font-size:14px;color:var(--om);margin-bottom:24px}
+.lr-tip{margin-top:16px;padding:13px 15px;background:var(--sc);border-radius:var(--r);font-size:13px;color:var(--ov2);line-height:1.7;border:1px solid var(--ov)}
+.lr-tip b{color:var(--on)}
+.lr-brand{display:none}
+.err-box{background:var(--rc);border:1px solid rgba(220,38,38,.2);color:var(--red);padding:12px 14px;border-radius:var(--r);font-size:13.5px;margin-bottom:14px;display:flex;align-items:center;gap:9px}
+
+/* Desktop login */
+@media(min-width:640px){
+  #lp{align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,#EFF6FF 0%,#F7F8FC 50%,#F5F3FF 100%)}
+  .lcard{min-height:auto;border-radius:24px;box-shadow:var(--e4);display:grid;grid-template-columns:1.1fr 1fr;max-width:840px}
+  .lleft{padding:48px 40px;border-radius:24px 0 0 24px}
+  .ll-chips{display:flex}
+  .lright{padding:48px 40px;flex:unset}
+  .lr-brand{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+  .lr-b-icon{width:34px;height:34px;background:var(--pri);border-radius:10px;display:flex;align-items:center;justify-content:center}
+  .lr-b-name{font-size:17px;font-weight:700}
+}
+
+/* ── DEPT PICKER ─────────────────────────────── */
+#deptPicker{
+  position:fixed;inset:0;z-index:800;
+  background:var(--bg);display:flex;align-items:flex-start;justify-content:center;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:max(env(safe-area-inset-top,0),20px) 16px 20px;
+}
+.dp-card{background:var(--surf);border-radius:var(--rx);box-shadow:var(--e3);max-width:580px;width:100%;padding:28px 24px;margin:auto}
+.dp-h{font-size:22px;font-weight:700;margin-bottom:4px;letter-spacing:-.3px}
+.dp-s{font-size:14px;color:var(--om);margin-bottom:20px}
+.dept-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+.dept-opt{border:2px solid var(--ov);border-radius:16px;padding:16px;cursor:pointer;transition:all var(--tr);background:var(--surf);text-align:left}
+.dept-opt:hover,.dept-opt:active{border-color:var(--pri);background:var(--pc);transform:translateY(-1px)}
+.dept-opt.sel{border-color:var(--pri);background:var(--pc)}
+.dept-ic{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;font-size:20px}
+.dept-name{font-size:13.5px;font-weight:600}
+
+/* ── FORMS ───────────────────────────────────── */
+.fg{margin-bottom:18px}
+.fl{display:block;font-size:11.5px;font-weight:700;color:var(--ov2);margin-bottom:7px;text-transform:uppercase;letter-spacing:.06em}
+.fi{
+  width:100%;padding:14px 15px;
+  border:1.5px solid var(--out);border-radius:var(--r);
+  font-size:16px;color:var(--on);background:var(--surf);
+  transition:border-color var(--tr),box-shadow var(--tr);
+  -webkit-appearance:none;appearance:none;
+}
+.fi:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.fi::placeholder{color:var(--out)}
+select.fi{cursor:pointer;padding-right:34px;background:var(--surf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23787B88' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 13px center}
+textarea.fi{resize:vertical;min-height:80px;font-size:14px}
+.multi-sel{width:100%;border:1.5px solid var(--out);border-radius:var(--r);max-height:180px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px}
+.multi-sel-item{display:flex;align-items:center;gap:10px;padding:10px 11px;border-radius:10px;cursor:pointer;font-size:14px;transition:background var(--tr)}
+.multi-sel-item:hover,.multi-sel-item:active{background:var(--sc)}
+.multi-sel-item.checked{background:var(--pc)}
+.multi-sel-item input[type=checkbox]{accent-color:var(--pri);width:16px;height:16px;flex-shrink:0}
+
+/* ── BUTTONS ─────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:12px 22px;border:none;border-radius:var(--rx);
+  font-size:14.5px;font-weight:600;font-family:var(--f);
+  cursor:pointer;transition:all var(--tr);white-space:nowrap;line-height:1;
+  min-height:46px;
+}
+.btn:active{transform:scale(.95)}.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+.bw{width:100%}
+.bf{background:var(--pri);color:#fff}.bf:hover:not(:disabled){background:#1D4ED8;box-shadow:var(--e2)}
+.bt{background:var(--pc);color:var(--opc)}.bt:hover:not(:disabled){background:#BFDBFE}
+.bo{background:transparent;color:var(--pri);border:1.5px solid var(--out)}.bo:hover:not(:disabled){background:rgba(37,99,235,.06);border-color:var(--pri)}
+.bx{background:transparent;color:var(--pri);border:none;padding:9px 14px}.bx:hover:not(:disabled){background:rgba(37,99,235,.08)}
+.bdn{background:var(--rc);color:var(--red);border:1.5px solid rgba(220,38,38,.2)}.bdn:hover:not(:disabled){background:#FCA5A5}
+.sm{padding:8px 16px;font-size:13px;min-height:36px}
+.ib{
+  width:36px;height:36px;border-radius:var(--r);border:none;
+  background:transparent;color:var(--om);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:all var(--tr);flex-shrink:0;
+}
+.ib:hover{background:var(--sch);color:var(--on)}.ib:active{transform:scale(.88)}
+.ib.dn:hover{background:var(--rc);color:var(--red)}
+.ib.ok:hover{background:var(--gc);color:var(--grn)}
+.ib.pri:hover{background:var(--pc);color:var(--pri)}
+#lbtn{min-height:50px;font-size:15px;letter-spacing:.01em;border-radius:var(--r)}
+
+/* ── APP SHELL ───────────────────────────────── */
+#app{
+  display:flex;
+  height:100vh;height:100dvh;height:-webkit-fill-available;
+  overflow:hidden;
+}
+
+/* ── SIDEBAR (tablet+) ───────────────────────── */
+.sb{
+  width:var(--sb);min-width:var(--sb);
+  background:var(--surf);border-right:1px solid var(--ov);
+  display:flex;flex-direction:column;flex-shrink:0;
+}
+.sb-brand{
+  padding:20px 18px 16px;border-bottom:1px solid var(--ov);
+  display:flex;align-items:center;gap:11px;
+}
+.sb-bic{width:36px;height:36px;background:var(--pri);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-btext{font-size:17px;font-weight:700;letter-spacing:-.3px}
+.sb-ws{margin:10px 12px 6px;background:var(--pc);border-radius:var(--rm);padding:10px 14px;border:1px solid rgba(37,99,235,.15)}
+.sb-ws-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--pri);margin-bottom:2px}
+.sb-ws-name{font-size:13.5px;font-weight:700;color:var(--opc)}
+.sb-ws.clickable{cursor:pointer;transition:background var(--tr)}.sb-ws.clickable:hover{background:#BFDBFE}
+.sb-nav{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px}
+.ns{margin-bottom:6px}
+.ns-lbl{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--om);padding:10px 12px 5px;display:block}
+.ni{
+  display:flex;align-items:center;gap:11px;padding:11px 13px;
+  border-radius:12px;font-size:14px;font-weight:500;color:var(--ov2);
+  cursor:pointer;transition:all var(--tr);user-select:none;margin-bottom:2px;
+}
+.ni:hover{background:var(--sc);color:var(--on)}
+.ni.on{background:var(--pc);color:var(--opc);font-weight:600}
+.ni.on i{color:var(--pri)}
+.ni-bd{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:99px;min-width:18px;text-align:center}
+.sb-ft{padding:12px;border-top:1px solid var(--ov)}
+.sb-user{display:flex;align-items:center;gap:10px;cursor:pointer;padding:9px 10px;border-radius:12px;transition:background var(--tr)}
+.sb-user:hover{background:var(--sc)}
+.sb-un{font-size:13px;font-weight:600;color:var(--on);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.sb-ur{font-size:11.5px;color:var(--om)}
+.lb{padding:7px;border-radius:9px;border:none;background:transparent;color:var(--om);cursor:pointer;display:flex;align-items:center;transition:all var(--tr)}
+.lb:hover{background:var(--rc);color:var(--red)}
+
+/* ── AVATAR ──────────────────────────────────── */
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;flex-shrink:0}
+.av-xs{width:26px;height:26px;font-size:9.5px}
+.av-sm{width:32px;height:32px;font-size:12px}
+.av-md{width:40px;height:40px;font-size:15px}
+.av-lg{width:52px;height:52px;font-size:18px}
+
+/* ── MAIN AREA ───────────────────────────────── */
+.mn{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* Top header bar */
+.tb{
+  height:var(--th);background:var(--surf);border-bottom:1px solid var(--ov);
+  display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;
+  padding-top:env(safe-area-inset-top,0);
+}
+.tb-t{font-size:17px;font-weight:700;color:var(--on);flex:1;letter-spacing:-.2px}
+
+/* Scrollable content */
+.ct{
+  flex:1;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  padding:20px 20px calc(var(--bnav) + 20px + env(safe-area-inset-bottom));
+}
+
+/* ── STAT CARDS ──────────────────────────────── */
+.sg{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px}
+@media(min-width:480px){.sg{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}}
+.sc{
+  background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);
+  padding:18px;cursor:pointer;transition:all var(--tr);position:relative;overflow:hidden;
+}
+.sc:hover{box-shadow:var(--e2);transform:translateY(-2px);border-color:var(--out)}
+.sc:active{transform:scale(.97)}
+.sc-ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.sc-lbl{font-size:11px;font-weight:700;color:var(--om);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.sc-val{font-size:28px;font-weight:700;color:var(--on);letter-spacing:-.5px;line-height:1}
+.sc-sub{font-size:12px;color:var(--om);margin-top:5px}
+.sc-arr{position:absolute;right:14px;bottom:14px;opacity:.18;transition:opacity var(--tr)}
+.sc:hover .sc-arr{opacity:.4}
+
+/* ── BADGE ───────────────────────────────────── */
+.bdg{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-admin{background:#DBEAFE;color:#1D4ED8}.b-manager{background:var(--puc);color:var(--pur)}.b-member{background:var(--sc);color:var(--ov2)}
+.b-active{background:var(--gc);color:var(--grn)}.b-pending{background:var(--ac);color:var(--amb)}.b-done{background:var(--sch);color:var(--om)}
+.b-urgent{background:var(--rc);color:var(--red)}.b-high{background:#FEF3C7;color:#D97706}.b-normal{background:var(--sc);color:var(--om)}
+.b-on{background:var(--gc);color:var(--grn)}
+
+/* ── CARD ────────────────────────────────────── */
+.card{background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);overflow:hidden}
+.card-hd{padding:15px 18px;border-bottom:1px solid var(--ov);display:flex;align-items:center;gap:10px}
+.card-t{font-size:14.5px;font-weight:700;flex:1}
+.card-bd{padding:18px}
+
+/* ── SECTION HEADER ──────────────────────────── */
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap}
+.st{font-size:16px;font-weight:700;letter-spacing:-.2px}
+.st b{font-weight:400;font-size:13px;color:var(--om);margin-left:5px}
+
+/* ── PROGRESS ────────────────────────────────── */
+.pb{height:6px;background:var(--ov);border-radius:99px;overflow:hidden;margin-top:5px}
+.pf{height:100%;border-radius:99px;transition:width .6s cubic-bezier(.34,1.2,.64,1)}
+
+/* ── TABLE ───────────────────────────────────── */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;min-width:480px}
+thead tr{border-bottom:1px solid var(--ov)}
+th{padding:10px 14px;font-size:11px;font-weight:700;color:var(--om);text-align:left;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:var(--sc)}
+tbody tr{border-bottom:1px solid var(--ov);transition:background var(--tr)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--sc)}
+td{padding:12px 14px;font-size:14px;color:var(--on);vertical-align:middle}
+.tda{display:flex;align-items:center;gap:4px}
+
+/* ── TASK CARDS ──────────────────────────────── */
+.tc-list{display:flex;flex-direction:column;gap:10px}
+.tc{background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);padding:16px;transition:box-shadow var(--tr),transform var(--tr)}
+.tc:hover{box-shadow:var(--e2);transform:translateY(-1px)}
+.tc-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.tc-t{font-size:15px;font-weight:600;flex:1;color:var(--on);line-height:1.4}
+.tc-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tc-act{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--ov)}
+.pd{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:6px}
+.pd-urgent{background:var(--red)}.pd-high{background:var(--amb)}.pd-normal{background:var(--grn)}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:500;background:var(--sc);color:var(--ov2);border:1px solid var(--ov)}
+
+/* ── MODAL (bottom sheet on mobile) ─────────── */
+.mbg{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:700;
+  display:flex;align-items:flex-end;justify-content:center;
+  padding:0;opacity:0;pointer-events:none;transition:opacity .22s;
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+}
+.mbg.open{opacity:1;pointer-events:all}
+.modal{
+  background:var(--surf);
+  border-radius:24px 24px 0 0;
+  box-shadow:var(--e4);
+  width:100%;max-width:560px;
+  max-height:94dvh;max-height:94vh;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  transform:translateY(24px);transition:transform .28s cubic-bezier(.34,1.1,.64,1);
+  padding-bottom:max(env(safe-area-inset-bottom),16px);
+  /* drag handle */
+  padding-top:0;
+}
+.modal::before{
+  content:'';display:block;width:40px;height:4px;
+  background:var(--out);border-radius:99px;
+  margin:12px auto 4px;flex-shrink:0;
+}
+.mbg.open .modal{transform:none}
+.mlg{max-width:640px}
+.mhd{padding:12px 20px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--ov)}
+.mt{font-size:16px;font-weight:700;letter-spacing:-.2px}
+.mx{width:32px;height:32px;border-radius:50%;border:none;background:var(--sc);cursor:pointer;color:var(--om);display:flex;align-items:center;justify-content:center;transition:all var(--tr)}
+.mx:hover{background:var(--sch);color:var(--on)}
+.mbd{padding:18px 20px}
+.mft{padding:12px 20px;display:flex;align-items:center;justify-content:flex-end;gap:9px;border-top:1px solid var(--ov)}
+
+/* ── NOTIFICATION PANEL ──────────────────────── */
+.notif-panel{
+  position:fixed;top:calc(var(--th) + env(safe-area-inset-top,0));right:14px;
+  width:340px;max-width:calc(100vw - 28px);
+  max-height:72dvh;background:var(--surf);border:1px solid var(--ov);
+  border-radius:18px;box-shadow:var(--e4);z-index:600;
+  display:flex;flex-direction:column;overflow:hidden;
+  opacity:0;pointer-events:none;transform:translateY(-8px) scale(.96);transition:all .18s;
+}
+.notif-panel.open{opacity:1;pointer-events:all;transform:none}
+.notif-hd{padding:14px 16px;border-bottom:1px solid var(--ov);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.notif-title{font-size:15px;font-weight:700}
+.notif-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.notif-item{padding:14px 16px;border-bottom:1px solid var(--ov);display:flex;gap:10px;cursor:pointer;transition:background var(--tr)}
+.notif-item:hover,.notif-item:active{background:var(--sc)}
+.notif-item:last-child{border-bottom:none}
+.notif-item.unread{background:rgba(37,99,235,.04)}
+.notif-dot{width:8px;height:8px;border-radius:50%;background:var(--pri);flex-shrink:0;margin-top:5px}
+.notif-txt{font-size:13.5px;line-height:1.5}
+.notif-time{font-size:11px;color:var(--om);margin-top:3px}
+.notif-empty{padding:40px 16px;text-align:center;color:var(--om);font-size:13.5px}
+
+/* ── CHECKLIST CARDS ─────────────────────────── */
+.cl-cards{display:flex;flex-direction:column;gap:10px}
+.cl-card{
+  background:var(--surf);border:1.5px solid var(--ov);border-radius:var(--rl);
+  overflow:hidden;transition:border-color var(--tr),box-shadow var(--tr);
+}
+.cl-card.is-done{border-color:rgba(22,163,74,.25);background:#FAFFFE}
+.cl-card-main{display:flex;align-items:flex-start;gap:14px;padding:16px 16px 10px}
+/* Custom checkbox */
+.cl-check{position:relative;width:26px;height:26px;cursor:pointer;display:inline-flex;flex-shrink:0}
+.cl-check input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+.cl-check-box{
+  width:26px;height:26px;border-radius:8px;border:2px solid var(--out);
+  background:var(--surf);transition:all .2s cubic-bezier(.4,0,.2,1);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.cl-check:hover .cl-check-box,.cl-check:active .cl-check-box{border-color:var(--pri);background:rgba(37,99,235,.06)}
+.cl-check input:checked~.cl-check-box{background:var(--grn);border-color:var(--grn);box-shadow:0 2px 12px rgba(22,163,74,.28)}
+.cl-check-tick{width:14px;height:14px;opacity:0;transform:scale(.2) rotate(-15deg);transition:all .22s cubic-bezier(.34,1.56,.64,1);display:block}
+.cl-check-tick polyline{stroke:#fff;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;fill:none}
+.cl-check input:checked~.cl-check-box .cl-check-tick{opacity:1;transform:scale(1) rotate(0)}
+.cl-card-body{flex:1;min-width:0}
+.cl-card-title{font-size:15px;font-weight:600;color:var(--on);line-height:1.4;transition:all var(--tr)}
+.cl-card.is-done .cl-card-title{text-decoration:line-through;color:var(--om)}
+.cl-card-desc{font-size:13px;color:var(--ov2);margin-top:4px;line-height:1.5}
+.cl-card-meta{display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap}
+.cl-card-actions{display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0}
+/* Note input */
+.cl-note-wrap{padding:0 16px 14px 56px}
+.cl-note-input{
+  width:100%;padding:9px 12px;border:1.5px solid transparent;
+  border-radius:10px;font-size:14px;font-family:var(--f);
+  background:var(--sc);color:var(--on);
+  transition:all var(--tr);
+}
+.cl-note-input:hover{border-color:var(--out);background:var(--sch)}
+.cl-note-input:focus{outline:none;border-color:var(--pri);background:var(--surf);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.cl-note-saving{border-color:var(--amb)!important}
+.cl-note-saved{border-color:var(--grn)!important}
+/* Comment thread */
+.cl-cmt-wrap{border-top:1px solid var(--ov);background:var(--sc)}
+.cl-cmt-inner{padding:12px 16px 14px}
+.cl-cmt-hd{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--om);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.cl-cmt-list{max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+.cl-cmt-item{display:flex;gap:8px;font-size:13.5px}
+.cl-cmt-bubble{flex:1;background:var(--surf);border:1px solid var(--ov);border-radius:4px var(--r) var(--r) var(--r);padding:9px 12px;line-height:1.5}
+.cl-cmt-bubble.mine{background:var(--pc);border-color:rgba(37,99,235,.2);border-radius:var(--r) 4px var(--r) var(--r)}
+.cl-cmt-author{font-size:11px;font-weight:700;color:var(--om);margin-bottom:3px}
+.cl-cmt-row{display:flex;gap:8px}
+.cl-cmt-input{flex:1;padding:11px 14px;border:1.5px solid var(--out);border-radius:var(--rx);font-size:15px;font-family:var(--f);background:var(--surf);color:var(--on)}
+.cl-cmt-input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+
+/* ── MEMBER OVERVIEW PANELS ──────────────────── */
+.ucl-panel{margin-bottom:10px;border-radius:var(--rl);overflow:hidden;border:1px solid var(--ov)}
+.ucl-header{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--sc);cursor:pointer;user-select:none;transition:background var(--tr)}
+.ucl-header:hover,.ucl-header:active{background:var(--sch)}
+.ucl-body{border-top:1px solid var(--ov)}
+.ucl-chevron{transition:transform .2s;flex-shrink:0}
+.ucl-chevron.open{transform:rotate(180deg)}
+.ucmt-section{padding:14px 16px;background:var(--sc);border-top:1px solid var(--ov)}
+.ucmt-list{max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px}
+.ucmt-item{display:flex;gap:8px;margin-bottom:10px}
+.ucmt-bubble{flex:1;background:var(--surf);border:1px solid var(--ov);border-radius:var(--r);padding:9px 12px;font-size:14px;line-height:1.5}
+.ucmt-meta{font-size:11px;font-weight:600;color:var(--om);margin-bottom:3px}
+.ucmt-mine .ucmt-bubble{background:var(--pc);border-color:rgba(37,99,235,.2)}
+.ucmt-input-row{display:flex;gap:8px}
+.ucmt-input{flex:1;padding:11px 14px;border:1.5px solid var(--out);border-radius:var(--rx);font-size:15px;font-family:var(--f);background:var(--surf);color:var(--on)}
+.ucmt-input:focus{outline:none;border-color:var(--pri)}
+.cl-member-row{display:flex;align-items:center;gap:11px;padding:13px 16px;border-bottom:1px solid var(--ov);cursor:pointer;transition:background var(--tr)}
+.cl-member-row:last-child{border-bottom:none}
+.cl-member-row:hover,.cl-member-row:active{background:var(--sc)}
+.cl-pct{font-size:12px;font-weight:700;color:var(--grn);flex-shrink:0}
+
+/* ── LIVE TIMER (subtle) ─────────────────────── */
+.session-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--gc);border:1px solid rgba(22,163,74,.2);
+  color:var(--grn);border-radius:99px;
+  padding:5px 12px;font-size:12.5px;font-weight:700;font-family:var(--mono);
+}
+.session-dot{width:7px;height:7px;border-radius:50%;background:var(--grn);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+/* Keep timer chip for desktop sidebar */
+.timer-chip{display:inline-flex;align-items:center;gap:6px;background:var(--gc);border:1px solid rgba(22,163,74,.2);color:var(--grn);border-radius:99px;padding:5px 12px;font-size:12px;font-weight:700;font-family:var(--mono)}
+.timer-dot{width:7px;height:7px;border-radius:50%;background:var(--grn);animation:pulse 1.8s ease-in-out infinite}
+
+/* ── LOGOUT MODAL ────────────────────────────── */
+.logout-modal{
+  background:var(--surf);border-radius:24px 24px 0 0;
+  width:100%;max-width:420px;
+  padding:8px 24px max(24px,env(safe-area-inset-bottom)) 24px;
+  text-align:center;
+}
+.logout-modal::before{content:'';display:block;width:40px;height:4px;background:var(--out);border-radius:99px;margin:12px auto 20px}
+.logout-modal h3{font-size:19px;font-weight:700;margin-bottom:8px;letter-spacing:-.3px}
+.logout-modal p{font-size:14px;color:var(--ov2);line-height:1.6;margin-bottom:14px}
+.logout-timer-display{font-size:36px;font-weight:700;font-family:var(--mono);color:var(--on);letter-spacing:.02em}
+.logout-session-lbl{font-size:13px;color:var(--om);margin:4px 0 24px}
+.logout-btn-row{display:flex;gap:10px}
+
+/* ── MISC ────────────────────────────────────── */
+.two{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+.att-row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--ov)}
+.att-row:last-child{border-bottom:none}
+.don{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 0 2px var(--gc);flex-shrink:0}
+.doff{width:8px;height:8px;border-radius:50%;background:var(--out);flex-shrink:0}
+.fb{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.si{flex:1;min-width:140px;padding:11px 14px;border:1.5px solid var(--out);border-radius:var(--rx);font-size:15px;font-family:var(--f);background:var(--surf);color:var(--on)}
+.si:focus{outline:none;border-color:var(--pri)}
+.info-box{background:var(--pc);border:1px solid rgba(37,99,235,.2);border-radius:var(--r);padding:13px 15px;font-size:13.5px;color:var(--opc);line-height:1.6;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px}
+.warn-box{background:var(--ac);border:1px solid rgba(217,119,6,.2);border-radius:var(--r);padding:13px 15px;font-size:13.5px;color:var(--amb);line-height:1.6;margin-bottom:13px;display:flex;align-items:flex-start;gap:10px}
+.tr-admin{display:flex;align-items:center;gap:11px;padding:14px;background:var(--pc);border:1px solid rgba(37,99,235,.2);border-radius:var(--rl);margin-bottom:12px}
+.tr-mgrl{margin-left:24px;padding-left:14px;border-left:2px solid var(--ov);margin-bottom:9px}
+.tr-mgr{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surf);border:1px solid var(--ov);border-radius:var(--r)}
+.tr-meml{margin-left:20px;padding-left:11px;border-left:2px dashed var(--out);margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.tr-mem{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--sc);border-radius:var(--r);font-size:13.5px}
+.empty{padding:52px 20px;text-align:center;color:var(--om)}
+.empty-t{font-size:15px;font-weight:600;color:var(--on);margin-bottom:5px}
+.export-btn-xl{background:#16A34A;color:#fff;border:none}.export-btn-xl:hover:not(:disabled){background:#15803D}
+.export-btn-pdf{background:#DC2626;color:#fff;border:none}.export-btn-pdf:hover:not(:disabled){background:#B91C1C}
+
+/* ── BOTTOM NAVIGATION ───────────────────────── */
+.mob-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;
+  height:calc(var(--bnav) + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid rgba(0,0,0,.08);
+  z-index:500;
+  align-items:center;justify-content:space-around;
+  padding-left:4px;padding-right:4px;
+}
+.mob-nav-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;padding:6px 4px;
+  border-radius:14px;background:none;border:none;
+  cursor:pointer;color:var(--om);
+  font-size:10.5px;font-family:var(--f);font-weight:500;
+  flex:1;transition:color .15s;position:relative;
+  min-height:var(--bnav);letter-spacing:.01em;
+}
+.mob-nav-btn svg{transition:all .18s cubic-bezier(.34,1.2,.64,1)}
+.mob-nav-btn.on{color:var(--pri)}
+.mob-nav-btn.on svg{stroke:var(--pri)!important;transform:scale(1.1)}
+.mob-nav-btn:active svg{transform:scale(.85)}
+/* Pill indicator */
+.mob-nav-btn.on::before{
+  content:'';position:absolute;top:5px;left:50%;transform:translateX(-50%);
+  width:28px;height:3px;background:var(--pri);border-radius:99px;
+}
+.mob-nav-bd{
+  position:absolute;top:4px;left:calc(50% + 6px);
+  background:var(--red);color:#fff;
+  font-size:9px;font-weight:700;
+  min-width:16px;height:16px;border-radius:99px;
+  display:none;align-items:center;justify-content:center;
+  padding:0 3px;border:2px solid #fff;
+}
+
+/* ── ACTIVITY PAGE ───────────────────────────── */
+.act-session-card{
+  background:linear-gradient(135deg,#EFF6FF,#F0FDF4);
+  border:1px solid rgba(37,99,235,.15);
+  border-radius:var(--rl);padding:20px;margin-bottom:16px;
+}
+.act-timer-big{font-size:42px;font-weight:700;font-family:var(--mono);color:var(--on);letter-spacing:.04em;line-height:1}
+.act-timer-lbl{font-size:13px;color:var(--om);margin-top:5px}
+
+/* ── RESPONSIVE ──────────────────────────────── */
+@media(max-width:900px){
+  .two{grid-template-columns:1fr}
+  .sb{width:64px;min-width:64px}
+  .sb-btext,.ni span,.ns-lbl,.sb-un,.sb-ur,.sb-ws{display:none}
+  .ni{justify-content:center;padding:11px}
+  .sb-brand,.sb-ft{justify-content:center;padding:14px 8px}
+  .sb-user{justify-content:center}
+  .lb{margin:0}
+  .timer-chip{display:none}
+}
+@media(max-width:640px){
+  html,body{font-size:15px}
+  #app{height:100dvh;height:-webkit-fill-available}
+  .sb{display:none}
+  .mn{height:100%;overflow:hidden;display:flex;flex-direction:column}
+  .ct{
+    flex:1;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+    padding:16px 14px calc(var(--bnav) + 16px + env(safe-area-inset-bottom));
+  }
+  .tb{
+    padding:env(safe-area-inset-top,0) 14px 0;
+    height:calc(var(--th) + env(safe-area-inset-top,0));
+  }
+  .mob-nav{display:flex!important}
+  .notif-panel{width:calc(100vw - 24px);right:12px}
+  /* forms */
+  .fi{font-size:16px;padding:14px 15px}
+  /* stat grid */
+  .sg{grid-template-columns:repeat(2,1fr);gap:10px}
+  .sc{padding:15px}
+  .sc-val{font-size:24px}
+  .sc-ic{width:36px;height:36px;margin-bottom:10px}
+  /* task table → cards */
+  .task-table-wrap{display:none!important}
+  .task-cards-wrap{display:flex!important}
+  /* dept picker */
+  .dept-grid{grid-template-columns:repeat(2,1fr)}
+  #deptPicker{padding:14px}
+  .dp-card{padding:24px 18px;border-radius:24px}
+  /* hide desktop timer */
+  .timer-chip{display:none!important}
+  /* checklist note indent */
+  .cl-note-wrap{padding:0 14px 12px 56px}
+  .cl-card-main{padding:14px 14px 8px}
+}
+@media(min-width:641px){
+  .task-cards-wrap{display:none!important}
+  .task-table-wrap{display:block!important}
+}
+.task-cards-wrap{display:none}
+.task-table-wrap{display:block}
+</style>
+</head>
+<body>
+
+<div id="ls">
+  <div class="ls-brand">
+    <div class="ls-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+    <div class="ls-name">ARK<b>A</b></div>
+  </div>
+  <svg class="ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14"/><circle class="arc" cx="18" cy="18" r="14" stroke-linecap="round"/></svg>
+  <div id="lsFb" style="display:none;font-size:13.5px;color:var(--om);text-align:center">Taking too long… <a href="javascript:void(0)" onclick="forceLogin()" style="color:var(--pri);font-weight:600">Go to login →</a></div>
+</div>
+<div id="tw"></div>
+
+<!-- LOGIN -->
+<div id="lp" class="hidden">
+  <div class="lcard">
+    <div class="lleft">
+      <div class="ll-logo">
+        <div class="ll-logo-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+        <div class="ll-logo-name">ARKA</div>
+      </div>
+      <div class="ll-tagline">Your team's command center — tasks, checklists & collaboration.</div>
+      <div class="ll-chips">
+        <div class="ll-chip"><div class="ll-chip-ic"><i data-lucide="layers" style="width:14px;height:14px;stroke:#fff;stroke-width:2"></i></div>Department workspaces</div>
+        <div class="ll-chip"><div class="ll-chip-ic"><i data-lucide="check-square" style="width:14px;height:14px;stroke:#fff;stroke-width:2"></i></div>Daily checklists for teams</div>
+        <div class="ll-chip"><div class="ll-chip-ic"><i data-lucide="users" style="width:14px;height:14px;stroke:#fff;stroke-width:2"></i></div>Assign tasks to anyone</div>
+      </div>
+    </div>
+    <div class="lright">
+      <div class="lr-brand">
+        <div class="lr-b-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+        <div class="lr-b-name">ARKA</div>
+      </div>
+      <div class="lr-eyebrow">Welcome back</div>
+      <div class="lr-h">Sign in</div>
+      <div class="lr-s">Use your workspace credentials</div>
+      <div id="lerr" class="err-box hidden"><i data-lucide="alert-circle" style="width:16px;height:16px;flex-shrink:0"></i><span id="lerrMsg"></span></div>
+      <div class="fg"><label class="fl">Email</label><input type="email" id="le" class="fi" placeholder="you@company.com" autocomplete="email"></div>
+      <div class="fg"><label class="fl">Password</label><input type="password" id="lp2" class="fi" placeholder="••••••••" autocomplete="current-password"></div>
+      <button id="lbtn" class="btn bf bw">Sign In</button>
+      <div class="lr-tip"><b>First time?</b> Add users via Firebase Auth console → first person becomes Admin → everyone picks a workspace on first login.</div>
+    </div>
+  </div>
+</div>
+
+<!-- DEPT PICKER -->
+<div id="deptPicker" class="hidden">
+  <div class="dp-card">
+    <div class="dp-h">Select your workspace</div>
+    <div class="dp-s" id="dpSub">Choose your department. This will be your permanent workspace.</div>
+    <div class="dept-grid" id="deptGrid"></div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button class="btn bf" id="deptEnterBtn" disabled>Enter Workspace</button>
+      <div style="font-size:12.5px;color:var(--om)">⚠ This selection is permanent. Contact Admin to change.</div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <aside class="sb">
+    <div class="sb-brand">
+      <div class="sb-bic"><i data-lucide="bolt" style="width:18px;height:18px;stroke:#fff;stroke-width:2.2"></i></div>
+      <div class="sb-btext">ARKA</div>
+    </div>
+    <div class="sb-ws" id="sbWs">
+      <div class="sb-ws-lbl">Workspace</div>
+      <div class="sb-ws-name"><span id="sbWsName">—</span></div>
+    </div>
+    <nav class="sb-nav" id="sbn"></nav>
+    <div class="sb-ft">
+      <div class="sb-user" onclick="go('account')">
+        <div class="av av-sm" id="sbav">?</div>
+        <div style="min-width:0;flex:1">
+          <div class="sb-un" id="sbname">User</div>
+          <div class="sb-ur" id="sbrole">—</div>
+        </div>
+        <button class="lb" id="logoutBtn" title="Sign out" onclick="event.stopPropagation()"><i data-lucide="log-out" style="width:15px;height:15px;stroke-width:2"></i></button>
+      </div>
+    </div>
+  </aside>
+  <main class="mn">
+    <div class="tb">
+      <div class="tb-t" id="tbt">Dashboard</div>
+      <div style="display:flex;align-items:center;gap:8px;position:relative">
+        <div class="timer-chip" id="workTimer" style="display:none">
+          <span class="timer-dot"></span>
+          <span id="timerDisplay">0h 0m</span>
+        </div>
+        <button class="ib pri" id="notifBtn" style="width:38px;height:38px;border-radius:50%;position:relative">
+          <i data-lucide="bell" style="width:18px;height:18px;stroke-width:1.75"></i>
+          <span id="notifDot" style="position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--red);border:2px solid var(--surf);display:none"></span>
+        </button>
+        <div class="notif-panel" id="notifPanel">
+          <div class="notif-hd">
+            <div class="notif-title">Notifications</div>
+            <button class="btn bx sm" onclick="clearNotifs()">Clear all</button>
+          </div>
+          <div class="notif-list" id="notifList"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ct" id="mc"></div>
+  </main>
+</div>
+
+<!-- MODALS -->
+
+<!-- Task Modal -->
+<div class="mbg" id="mTask">
+  <div class="modal mlg">
+    <div class="mhd"><div class="mt" id="mTaskTitle">New Task</div><button class="mx" onclick="closeM('mTask')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button></div>
+    <div class="mbd">
+      <input type="hidden" id="mt_id">
+      <div class="fg"><label class="fl">Title *</label><input type="text" id="mt_title" class="fi" placeholder="What needs to be done?"></div>
+      <div class="fg"><label class="fl">Description</label><textarea id="mt_desc" class="fi" placeholder="Add details…"></textarea></div>
+      <div class="fg">
+        <label class="fl">Assign To * <span style="font-size:10px;color:var(--grn);text-transform:none;letter-spacing:0">(select multiple people)</span></label>
+        <div class="multi-sel" id="mt_to_list"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg"><label class="fl">Priority</label><select id="mt_pri" class="fi"><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+        <div class="fg"><label class="fl">Due Date</label><input type="date" id="mt_due" class="fi"></div>
+      </div>
+      <div class="fg"><label class="fl">Status</label><select id="mt_status" class="fi"><option value="pending">Pending</option><option value="active">Active</option><option value="done">Done</option></select></div>
+    </div>
+    <div class="mft"><button class="btn bx sm" onclick="closeM('mTask')">Cancel</button><button class="btn bf sm" id="mt_sub">Create Task</button></div>
+  </div>
+</div>
+
+<!-- Task Detail -->
+<div class="mbg" id="mDetail">
+  <div class="modal mlg">
+    <div class="mhd"><div class="mt" id="mdTitle" style="font-size:14px;max-width:460px;line-height:1.35"></div><button class="mx" id="mDetailX" onclick="closeM('mDetail')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button></div>
+    <div class="mbd" id="mdBody"></div>
+  </div>
+</div>
+
+<!-- User Edit -->
+<div class="mbg" id="mUser">
+  <div class="modal">
+    <div class="mhd"><div class="mt" id="muTitle">Edit User</div><button class="mx" onclick="closeM('mUser')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button></div>
+    <div class="mbd">
+      <input type="hidden" id="mu_id">
+      <div class="fg"><label class="fl">Display Name</label><input type="text" id="mu_name" class="fi"></div>
+      <div class="fg" id="mu_rg"><label class="fl">Role</label>
+        <select id="mu_role" class="fi" onchange="muRoleChange()"><option value="member">Member</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+      </div>
+      <div class="fg" id="mu_mg"><label class="fl">Assign Manager</label><select id="mu_mgr" class="fi"><option value="">No Manager</option></select></div>
+      <div class="fg" id="mu_ws_grp"><label class="fl">Workspace (Admin override)</label><select id="mu_ws" class="fi"><option value="">— Keep current —</option></select></div>
+    </div>
+    <div class="mft"><button class="btn bx sm" onclick="closeM('mUser')">Cancel</button><button class="btn bf sm" id="mu_sub">Save</button></div>
+  </div>
+</div>
+
+<!-- Comment Modal -->
+<div class="mbg" id="mNote">
+  <div class="modal">
+    <div class="mhd"><div class="mt">Add Comment</div><button class="mx" onclick="closeM('mNote')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button></div>
+    <div class="mbd"><input type="hidden" id="mn_tid"><div class="fg"><label class="fl">Comment</label><textarea id="mn_text" class="fi" style="min-height:88px" placeholder="Write something…"></textarea></div></div>
+    <div class="mft"><button class="btn bx sm" onclick="closeM('mNote')">Cancel</button><button class="btn bf sm" id="mn_sub">Post</button></div>
+  </div>
+</div>
+
+<!-- NEW: User Checklist Comment Modal (Admin/Manager → Member) -->
+<div class="mbg" id="mUCmt">
+  <div class="modal mlg">
+    <div class="mhd">
+      <div><div class="mt" id="mUCmtTitle">Daily Checklist</div><div style="font-size:12px;color:var(--om);margin-top:2px" id="mUCmtSub"></div></div>
+      <button class="mx" onclick="closeM('mUCmt')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button>
+    </div>
+    <div class="mbd" id="mUCmtBody"></div>
+  </div>
+</div>
+
+<!-- Checklist Template Modal -->
+<div class="mbg" id="mCL">
+  <div class="modal">
+    <div class="mhd"><div class="mt" id="mCLTitle">New Checklist Item</div><button class="mx" onclick="closeM('mCL')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button></div>
+    <div class="mbd">
+      <input type="hidden" id="cl_id">
+      <div class="fg"><label class="fl">Title *</label><input type="text" id="cl_title" class="fi" placeholder="e.g. Update rates daily"></div>
+      <div class="fg"><label class="fl">Description</label><textarea id="cl_desc" class="fi" placeholder="Instructions or details…"></textarea></div>
+      <div class="fg">
+        <label class="fl">Assign To (members) *</label>
+        <div class="multi-sel" id="cl_to_list"></div>
+      </div>
+    </div>
+    <div class="mft"><button class="btn bx sm" onclick="closeM('mCL')">Cancel</button><button class="btn bf sm" id="cl_sub">Save</button></div>
+  </div>
+</div>
+
+<!-- Workspace Switch (Admin only) -->
+<div class="mbg" id="mWs">
+  <div class="modal">
+    <div class="mhd"><div class="mt">Switch Workspace</div><button class="mx" onclick="closeM('mWs')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button></div>
+    <div class="mbd"><div id="wsListBody"></div></div>
+    <div class="mft"><button class="btn bx sm" onclick="closeM('mWs')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Workspace Rename -->
+<div class="mbg" id="mWsEdit">
+  <div class="modal">
+    <div class="mhd"><div class="mt">Rename Workspace</div><button class="mx" onclick="closeM('mWsEdit')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button></div>
+    <div class="mbd"><input type="hidden" id="wse_id"><div class="fg"><label class="fl">Name</label><input type="text" id="wse_name" class="fi"></div></div>
+    <div class="mft"><button class="btn bx sm" onclick="closeM('mWsEdit')">Cancel</button><button class="btn bf sm" id="wse_sub">Rename</button></div>
+  </div>
+</div>
+
+<!-- Seed -->
+<div class="mbg" id="mSeed">
+  <div class="modal mlg">
+    <div class="mhd"><div class="mt">Seed Demo Data</div><button class="mx" onclick="closeM('mSeed')"><i data-lucide="x" style="width:15px;height:15px;stroke-width:2.5"></i></button></div>
+    <div class="mbd">
+      <p style="font-size:13.5px;color:var(--ov2);margin-bottom:11px;line-height:1.6">Creates demo users + tasks. Requires Email/Password auth enabled in Firebase.</p>
+      <div class="warn-box"><i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0"></i><span>Set Firestore rules: <code style="background:rgba(0,0,0,.08);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px">allow read, write: if request.auth != null;</code></span></div>
+      <div id="slog" style="font-size:12px;font-family:var(--mono);background:var(--sc);border-radius:var(--r);padding:10px;max-height:180px;overflow-y:auto;display:none;line-height:1.9;border:1px solid var(--ov)"></div>
+    </div>
+    <div class="mft"><button class="btn bx sm" onclick="closeM('mSeed')">Close</button><button class="btn bf sm" id="seedBtn">Seed Demo Data</button></div>
+  </div>
+</div>
+
+<!-- Logout Confirm Modal -->
+<div class="mbg" id="mLogout">
+  <div class="logout-modal">
+    <div style="width:48px;height:48px;border-radius:50%;background:var(--rc);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+      <i data-lucide="log-out" style="width:22px;height:22px;stroke:var(--red);stroke-width:2"></i>
+    </div>
+    <h3>Sign Out?</h3>
+    <p>Your session time will be recorded.</p>
+    <div class="logout-timer-display" id="logoutSessionDisplay">0h 0m</div>
+    <div class="logout-session-lbl">Current session duration</div>
+    <div class="logout-btn-row">
+      <button class="btn bo bw" onclick="closeM('mLogout')">Cancel</button>
+      <button class="btn bdn bw" id="logoutConfirmBtn">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile bottom navigation — 6 tabs -->
+<nav class="mob-nav" id="mobNav">
+  <button class="mob-nav-btn" data-p="dashboard" onclick="go('dashboard')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    Home
+  </button>
+  <button class="mob-nav-btn" data-p="tasks" onclick="go('tasks')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Tasks
+  </button>
+  <button class="mob-nav-btn" data-p="checklist" onclick="go('checklist')" style="position:relative">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Checklist
+    <span class="mob-nav-bd" id="mob-cl-badge" style="display:none"></span>
+  </button>
+  <button class="mob-nav-btn" data-p="mob-more" id="mobMoreBtn" onclick="toggleMobMore()">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+    More
+  </button>
+</nav>
+
+<!-- Mobile "More" drawer -->
+<div id="mobMoreDrawer" style="display:none;position:fixed;bottom:calc(var(--bnav) + env(safe-area-inset-bottom));left:0;right:0;background:var(--surf);border-top:1px solid var(--ov);border-radius:22px 22px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.12);z-index:399;padding:16px 8px 8px">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px" id="mobMoreGrid">
+    <!-- filled by JS based on role -->
+  </div>
+</div>
+<div id="mobMoreBackdrop" onclick="closeMobMore()" style="display:none;position:fixed;inset:0;z-index:398"></div>
+
+<script type="module">
+// ── GLOBAL SAFETY NET ──
+window.addEventListener('error',e=>{console.error('ARKA:',e.message);const ls=$('ls');const lp=$('lp');if(ls&&!ls.classList.contains('hidden')){ls.classList.add('hidden');if(lp)lp.classList.remove('hidden');}});
+window.addEventListener('unhandledrejection',e=>{console.error('ARKA Promise:',e.reason);const ls=$('ls');if(ls&&!ls.classList.contains('hidden')){ls.classList.add('hidden');const lp=$('lp');if(lp)lp.classList.remove('hidden');}});
+window.forceLogin=function(){try{$('ls').classList.add('hidden');$('lp').classList.remove('hidden');}catch{}};
+setTimeout(()=>{const f=$('lsFb');if(f)f.style.display='block';},4000);
+setTimeout(()=>{const ls=$('ls');if(ls&&!ls.classList.contains('hidden')){ls.classList.add('hidden');const lp=$('lp');if(lp)lp.classList.remove('hidden');}},9000);
+
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { getFirestore, collection, addDoc, setDoc, doc, getDoc, getDocs, query, where, onSnapshot, orderBy, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+try{if(typeof lucide!=='undefined')lucide.createIcons();}catch(e){}
+
+const CFG={apiKey:"AIzaSyCO9KVo_68CP14kkdqszmyJpdXMvsxuvkY",authDomain:"arka-2e906.firebaseapp.com",projectId:"arka-2e906",storageBucket:"arka-2e906.firebasestorage.app",messagingSenderId:"100146944602",appId:"1:100146944602:web:4313895af456b22c31d663"};
+const fapp=initializeApp(CFG);
+const auth=getAuth(fapp);
+const db=getFirestore(fapp);
+
+// ── STATE ──
+let ME=null,CWS=null;
+let allUsers=[],allTasks=[],allComments=[],allAtt=[],allWorkspaces=[],allNotifs=[],allChecklists=[],allCheckins=[];
+// NEW: state for user checklist comments (admin/manager view)
+let allUserCheckinComments={}; // keyed by checkin_id
+let unsubs=[],pg='',secIdx=0;
+let _detailUnsub=null,notifOpen=false;
+// NEW: Timer state
+let _timerInterval=null,_loginTimestamp=null;
+
+// ── HELPERS ──
+const $=id=>document.getElementById(id);
+function ic(n,sz=16,col='currentColor'){return`<i data-lucide="${n}" style="width:${sz}px;height:${sz}px;stroke:${col};stroke-width:1.75"></i>`;}
+function ri(){try{if(typeof lucide!=='undefined')lucide.createIcons();}catch(e){}}
+function toast(msg,t='info'){
+  const el=document.createElement('div');
+  el.className='toast t-'+t;
+  el.innerHTML=`<div class="tdot"></div><span>${msg}</span>`;
+  $('tw').appendChild(el);
+  requestAnimationFrame(()=>el.classList.add('show'));
+  setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.remove(),300)},3800);
+}
+function today(){return new Date().toISOString().split('T')[0];}
+function ini(n='?'){return(n||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';}
+function avc(n=''){const cs=['#1A73E8','#7B1FA2','#137333','#B06000','#C5221F','#00838F','#D81B60','#00796B','#5E35B1','#E65100'];let h=0;for(const c of(n||''))h=(h*31+c.charCodeAt(0))%cs.length;return cs[Math.abs(h)];}
+function rl(r){return{admin:'Admin',manager:'Manager',member:'Member'}[r]||r;}
+function rBdg(r){return`<span class="bdg b-${r}">${rl(r)}</span>`;}
+function sBdg(s){const m={active:'b-active',done:'b-done',pending:'b-pending'};return`<span class="bdg ${m[s]||'b-pending'}">${s||'pending'}</span>`;}
+function pBdg(p){const m={high:'b-high',urgent:'b-urgent',normal:'b-normal'};return`<span class="bdg ${m[p]||'b-normal'}">${p||'normal'}</span>`;}
+function avH(name,cls='av-sm'){return`<div class="av ${cls}" style="background:${avc(name)}">${ini(name)}</div>`;}
+function uById(id){return allUsers.find(u=>u.id===id);}
+function uName(id){const u=uById(id);return u?u.name:'Unknown';}
+function tTitle(id){const t=allTasks.find(t=>t.id===id);return t?t.title:'Task';}
+function sortC(arr){return arr.sort((a,b)=>(b.created_at?.toDate?.()?.getTime()||0)-(a.created_at?.toDate?.()?.getTime()||0));}
+function fmtTime(ts){try{const d=ts?.toDate?ts.toDate():new Date(ts);return d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});}catch{return '—';}}
+function fmtDT(ts){try{const d=ts?.toDate?ts.toDate():new Date(ts);return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return '—';}}
+function fmtMs(ms){if(!ms||ms<=0)return'0h 0m';return`${Math.floor(ms/3600000)}h ${Math.floor((ms%3600000)/60000)}m`;}
+const ICON_COLORS={blue:'#2563EB',grn:'#16A34A',amb:'#D97706',pur:'#7C3AED',red:'#DC2626',teal:'#0891B2',pink:'#DB2777'};
+const BG_COLORS={blue:'#DBEAFE',grn:'#DCFCE7',amb:'#FEF3C7',pur:'#EDE9FE',red:'#FEE2E2',teal:'#CFFAFE',pink:'#FCE7F3'};
+function sc(icon,color,label,value,sub='',navPage=''){
+  const ic_col=ICON_COLORS[color]||'#2563EB';
+  const bg_col=BG_COLORS[color]||'#DBEAFE';
+  const clickAttr=navPage?`onclick="go('${navPage}')" role="button" tabindex="0"`:'';
+  return`<div class="sc" ${clickAttr} style="${navPage?'cursor:pointer':''}">
+    <div class="sc-ic" style="background:${bg_col}">${ic(icon,20,ic_col)}</div>
+    <div class="sc-lbl">${label}</div>
+    <div class="sc-val">${value}</div>
+    ${sub?`<div class="sc-sub">${sub}</div>`:''}
+    ${navPage?`<svg class="sc-arr" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>`:''}
+  </div>`;
+}
+function progress(done,active,pending){
+  const total=done+active+pending||1;
+  return[['Done',done,'#16A34A'],['Active',active,'#2563EB'],['Pending',pending,'#D97706']].map(([l,v,col])=>{
+    const p=Math.round(v/total*100);
+    return`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:14px"><span style="font-weight:600">${l}</span><span style="color:var(--om)">${v} (${p}%)</span></div><div class="pb"><div class="pf" style="width:${p}%;background:${col}"></div></div></div>`;
+  }).join('');
+}
+function emH(icon,title,sub=''){return`<div class="empty"><i data-lucide="${icon}" style="width:36px;height:36px;stroke-width:1.25;display:block;margin:0 auto 10px"></i><div class="empty-t">${title}</div>${sub?`<div style="font-size:13px;max-width:260px;margin:0 auto">${sub}</div>`:''}</div>`;}
+
+// ── NEW: LIVE WORK TIMER ──
+function startTimer(loginTs){
+  _loginTimestamp=loginTs;
+  const chip=$('workTimer'),disp=$('timerDisplay');
+  if(chip)chip.style.display='inline-flex';
+  if(_timerInterval)clearInterval(_timerInterval);
+  function tick(){
+    if(!_loginTimestamp)return;
+    const ms=Date.now()-_loginTimestamp;
+    const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000),s=Math.floor((ms%60000)/1000);
+    if(disp)disp.textContent=`${h}h ${m}m ${s}s`;
+  }
+  tick();
+  _timerInterval=setInterval(tick,1000);
+}
+function stopTimer(){
+  if(_timerInterval){clearInterval(_timerInterval);_timerInterval=null;}
+  const chip=$('workTimer');if(chip)chip.style.display='none';
+  _loginTimestamp=null;
+}
+
+// ── NEW: IST 8AM DAILY RESET CHECK ──
+// Returns true if a checkin date string is today in IST
+function todayIST(){
+  const now=new Date();
+  // IST = UTC+5:30
+  const istMs=now.getTime()+(5.5*3600000);
+  const ist=new Date(istMs);
+  // Roll back to 8am IST reset boundary
+  const resetHour=8;
+  let year=ist.getUTCFullYear(),month=String(ist.getUTCMonth()+1).padStart(2,'0'),day=String(ist.getUTCDate()).padStart(2,'0');
+  // If current IST time is before 8am, checklist "today" is yesterday
+  if(ist.getUTCHours()<resetHour){
+    const prev=new Date(istMs-86400000);
+    year=prev.getUTCFullYear();month=String(prev.getUTCMonth()+1).padStart(2,'0');day=String(prev.getUTCDate()).padStart(2,'0');
+  }
+  return`${year}-${month}-${day}`;
+}
+// Schedule the next 8am IST reset
+function scheduleChecklistReset(){
+  const now=new Date();
+  const istNow=new Date(now.getTime()+(5.5*3600000));
+  // Next 8am IST
+  const next8=new Date(Date.UTC(istNow.getUTCFullYear(),istNow.getUTCMonth(),istNow.getUTCDate(),2,30,0,0)); // 8am IST = 2:30am UTC
+  if(next8.getTime()<=now.getTime())next8.setUTCDate(next8.getUTCDate()+1);
+  const msUntil=next8.getTime()-now.getTime();
+  setTimeout(()=>{
+    // Re-subscribe checkins with new IST date
+    unsubs.forEach(u=>u&&u());unsubs=[];
+    startListeners();
+    toast('Daily checklist has been reset for the new day!','info');
+    scheduleChecklistReset(); // reschedule for next day
+  },msUntil);
+}
+function attList(limit){
+  const us=limit?allUsers.slice(0,limit):allUsers;
+  if(!us.length)return emH('users','No users yet','');
+  return us.map(u=>{
+    const a=allAtt.find(x=>x.user_id===u.id),on=a&&!a.logout_time;
+    return`<div class="att-row"><div class="${on?'don':'doff'}"></div>${avH(u.name,'av-xs')}<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${u.name}</div><div style="font-size:11px;color:var(--om)">${rl(u.role)}</div></div><div style="text-align:right;font-size:12px">${a?`<div style="color:var(--grn);font-weight:500">${fmtTime(a.login_time)}</div>`:'<div style="color:var(--out)">Offline</div>'}${a&&a.logout_time?`<div style="color:var(--om)">Out ${fmtTime(a.logout_time)}</div>`:''}</div></div>`;
+  }).join('');
+}
+function openM(id){$(id).classList.add('open');setTimeout(ri,40);}
+function closeM(id){$(id).classList.remove('open');}
+window.closeM=closeM;
+document.querySelectorAll('.mbg').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
+
+// Close notif panel on outside click
+document.addEventListener('click',e=>{
+  const panel=$('notifPanel'),btn=$('notifBtn');
+  if(notifOpen&&panel&&!panel.contains(e.target)&&!btn.contains(e.target)){
+    panel.classList.remove('open');notifOpen=false;
+  }
+});
+
+// ── AUTH ──
+let authResolved=false;
+onAuthStateChanged(auth,async fbU=>{
+  authResolved=true;
+  if(fbU) await boot(fbU);
+  else showLogin();
+});
+setTimeout(()=>{if(!authResolved)showLogin();},5000);
+
+async function boot(fbU){
+  try{
+    const ref=doc(db,'users',fbU.uid);
+    const snap=await getDoc(ref);
+    if(!snap.exists()){
+      const aq=query(collection(db,'users'),where('role','==','admin'));
+      const as=await getDocs(aq);
+      const role=as.empty?'admin':'member';
+      const raw=fbU.displayName||fbU.email.split('@')[0];
+      const name=raw.replace(/[._-]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).trim();
+      await setDoc(ref,{name,email:fbU.email,role,phone:'',department:'',bio:'',manager_id:null,workspace_id:null,created_at:serverTimestamp()});
+      ME={id:fbU.uid,name,email:fbU.email,role,phone:'',department:'',bio:'',manager_id:null,workspace_id:null};
+      toast(role==='admin'?`Welcome ${name}! You're the Admin.`:`Welcome ${name}! You joined as Member.`,'ok');
+    }else{ME={id:fbU.uid,...snap.data()};}
+    await loadWorkspaces();
+    // If workspace already assigned → skip picker
+    if(ME.workspace_id){
+      CWS=allWorkspaces.find(w=>w.id===ME.workspace_id)||allWorkspaces[0];
+      await startAtt(ME.id);
+      setupApp();startListeners();
+    } else {
+      showDeptPicker();
+    }
+  }catch(e){console.error(e);toast('Load failed: '+e.message,'err');showLogin();}
+}
+
+function showLogin(){
+  $('ls').classList.add('hidden');
+  $('lp').classList.remove('hidden');
+  $('deptPicker').classList.add('hidden');
+  $('app').classList.add('hidden');
+  // Hide mobile nav on login screen
+  const mn=$('mobNav');if(mn)mn.style.display='none';
+  setTimeout(ri,80);
+}
+function showDeptPicker(){
+  $('ls').classList.add('hidden');
+  $('lp').classList.add('hidden');
+  $('deptPicker').classList.remove('hidden');
+  $('app').classList.add('hidden');
+  // Hide mobile nav on dept picker
+  const mn=$('mobNav');if(mn)mn.style.display='none';
+  renderDeptPicker();
+}
+function showApp(){
+  $('ls').classList.add('hidden');
+  $('lp').classList.add('hidden');
+  $('deptPicker').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  // Show mobile nav only on small screens
+  const mn=$('mobNav');
+  if(mn&&window.innerWidth<=640)mn.style.display='flex';
+}
+
+// ── LOGIN ──
+$('lbtn').addEventListener('click',async()=>{
+  const e=$('le').value.trim(),p=$('lp2').value.trim(),err=$('lerr');
+  err.classList.add('hidden');
+  if(!e||!p){$('lerrMsg').textContent='Enter email and password';err.classList.remove('hidden');return;}
+  const btn=$('lbtn');btn.disabled=true;btn.textContent='Signing in…';
+  try{await signInWithEmailAndPassword(auth,e,p);}
+  catch(ex){const m={'auth/invalid-credential':'Incorrect email or password.','auth/user-not-found':'No account found.','auth/wrong-password':'Incorrect password.','auth/invalid-email':'Invalid email.'};$('lerrMsg').textContent=m[ex.code]||ex.message;err.classList.remove('hidden');btn.disabled=false;btn.textContent='Sign In';}
+});
+$('lp2').addEventListener('keypress',e=>{if(e.key==='Enter')$('lbtn').click();});
+
+// ── LOGOUT MODAL ──
+window.openLogoutModal=function(){
+  const ms=_loginTimestamp?Date.now()-_loginTimestamp:0;
+  const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);
+  $('logoutSessionDisplay').textContent=`${h}h ${m}m`;
+  openM('mLogout');ri();
+};
+
+// Logout confirm button
+$('logoutConfirmBtn').addEventListener('click',async()=>{
+  $('logoutConfirmBtn').disabled=true;$('logoutConfirmBtn').textContent='Signing out…';
+  if(attDocId){
+    try{
+      const duration=_loginTimestamp?Date.now()-_loginTimestamp:null;
+      await updateDoc(doc(db,'attendance',attDocId),{
+        logout_time:serverTimestamp(),
+        ...(duration?{duration}:{})
+      });
+    }catch{}
+  }
+  stopTimer();
+  unsubs.forEach(u=>u&&u());unsubs=[];if(_detailUnsub){_detailUnsub();_detailUnsub=null;}
+  ME=null;CWS=null;attDocId=null;
+  closeM('mLogout');
+  await signOut(auth);showLogin();
+});
+
+// ── SIDEBAR LOGOUT ──
+$('logoutBtn').addEventListener('click',async ev=>{
+  ev.stopPropagation();
+  openLogoutModal();
+});
+
+// ── ATTENDANCE ── // UPDATED: records login_time_ms for timer continuity
+let attDocId=null;
+async function startAtt(uid){
+  try{
+    const q=query(collection(db,'attendance'),where('user_id','==',uid),where('date','==',today()));
+    const sn=await getDocs(q);
+    if(sn.empty){
+      const now=new Date();
+      const r=await addDoc(collection(db,'attendance'),{user_id:uid,login_time:serverTimestamp(),login_time_ms:now.getTime(),logout_time:null,duration:null,date:today(),workspace_id:CWS?CWS.id:''});
+      attDocId=r.id;
+      startTimer(now.getTime()); // NEW: start timer
+    }else{
+      attDocId=sn.docs[0].id;
+      const d=sn.docs[0].data();
+      if(d.logout_time)await updateDoc(doc(db,'attendance',attDocId),{logout_time:null,login_time_ms:Date.now()});
+      // NEW: resume timer from login_time_ms if available
+      const loginMs=d.login_time_ms||(d.login_time?.toDate?.()?.getTime())||Date.now();
+      startTimer(loginMs);
+    }
+  }catch(e){console.warn('att',e);}
+}
+
+// ── WORKSPACES ──
+async function loadWorkspaces(){
+  const sn=await getDocs(collection(db,'workspaces'));
+  allWorkspaces=sn.docs.map(d=>({id:d.id,...d.data()}));
+  if(allWorkspaces.length===0){
+    const defaults=[
+      {name:'CRM',icon:'👥',color:'#1A73E8',bg:'#E8F0FE'},
+      {name:'Digital Marketing',icon:'📣',color:'#137333',bg:'#E6F4EA'},
+      {name:'Development',icon:'💻',color:'#7B1FA2',bg:'#F3E8FD'},
+      {name:'Finance',icon:'💰',color:'#B06000',bg:'#FEF7E0'},
+      {name:'HR',icon:'🏢',color:'#C5221F',bg:'#FCE8E6'},
+    ];
+    for(const d of defaults){
+      const r=await addDoc(collection(db,'workspaces'),{...d,created_at:serverTimestamp()});
+      allWorkspaces.push({id:r.id,...d});
+    }
+  }
+}
+
+// ── DEPT PICKER ──
+function renderDeptPicker(){
+  const grid=$('deptGrid');
+  $('dpSub').textContent=`Welcome, ${ME.name}! Choose your permanent workspace.`;
+  let selectedId=null;
+  grid.innerHTML=allWorkspaces.map(ws=>`
+    <div class="dept-opt" id="dopt-${ws.id}" onclick="selectDept('${ws.id}')">
+      <div class="dept-ic" style="background:${ws.bg||'#E8F0FE'}">${ws.icon||'🏢'}</div>
+      <div class="dept-name">${ws.name}</div>
+    </div>`).join('');
+  ri();
+}
+window.selectDept=function(id){
+  document.querySelectorAll('.dept-opt').forEach(el=>el.classList.remove('sel'));
+  const el=$('dopt-'+id);if(el)el.classList.add('sel');
+  $('deptEnterBtn').disabled=false;
+  $('deptEnterBtn').dataset.wsid=id;
+};
+$('deptEnterBtn').addEventListener('click',async()=>{
+  const wsId=$('deptEnterBtn').dataset.wsid;
+  if(!wsId)return;
+  const ws=allWorkspaces.find(w=>w.id===wsId);
+  if(!ws)return;
+  // Save permanently to user profile
+  await updateDoc(doc(db,'users',ME.id),{workspace_id:wsId});
+  ME.workspace_id=wsId;
+  CWS=ws;
+  await startAtt(ME.id);
+  setupApp();startListeners();
+  toast(`Workspace set to ${ws.name}!`,'ok');
+});
+
+// ── WORKSPACE SWITCH (Admin only) ──
+window.openWsSwitch=function(){
+  if(ME.role!=='admin'){toast('Only Admin can switch workspaces','warn');return;}
+  const body=$('wsListBody');
+  body.innerHTML=allWorkspaces.map(ws=>`
+    <div style="display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid var(--ov);cursor:pointer;border-radius:var(--r);transition:background var(--tr)" onclick="switchWs('${ws.id}')" onmouseover="this.style.background='var(--sc)'" onmouseout="this.style.background=''">
+      <div style="width:36px;height:36px;border-radius:9px;background:${ws.bg||'#E8F0FE'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${ws.icon||'🏢'}</div>
+      <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${ws.name}</div></div>
+      ${CWS&&CWS.id===ws.id?'<span class="bdg b-active">Current</span>':''}
+      <button class="ib" onclick="event.stopPropagation();editWsName('${ws.id}','${ws.name.replace(/'/g,"\\'")}')">
+        ${ic('pencil',13)}
+      </button>
+    </div>`).join('');
+  ri();openM('mWs');
+};
+window.switchWs=async function(wsId){
+  const ws=allWorkspaces.find(w=>w.id===wsId);if(!ws)return;
+  CWS=ws;closeM('mWs');
+  unsubs.forEach(u=>u&&u());unsubs=[];allTasks=[];allComments=[];allChecklists=[];allCheckins=[];
+  startListeners();
+  $('sbWsName').textContent=CWS.name;
+  toast(`Switched to ${ws.name}`,'ok');go('dashboard');
+};
+window.editWsName=function(id,name){$('wse_id').value=id;$('wse_name').value=name;openM('mWsEdit');};
+$('wse_sub').addEventListener('click',async()=>{
+  const id=$('wse_id').value,name=$('wse_name').value.trim();
+  if(!name)return;
+  try{
+    await updateDoc(doc(db,'workspaces',id),{name});
+    const idx=allWorkspaces.findIndex(w=>w.id===id);if(idx>=0)allWorkspaces[idx].name=name;
+    if(CWS&&CWS.id===id){CWS.name=name;$('sbWsName').textContent=name;}
+    closeM('mWsEdit');closeM('mWs');toast('Renamed!','ok');
+  }catch(e){toast('Failed: '+e.message,'err');}
+});
+
+// ── SETUP APP ── // UPDATED: starts reset scheduler + mobile nav
+function setupApp(){
+  showApp();
+  const av=$('sbav');av.textContent=ini(ME.name);av.style.background=avc(ME.name);
+  $('sbname').textContent=ME.name;$('sbrole').textContent=rl(ME.role);
+  $('sbWsName').textContent=CWS?CWS.name:'—';
+  const wsBadge=$('sbWs');
+  if(ME.role==='admin'){wsBadge.classList.add('clickable');wsBadge.onclick=openWsSwitch;}
+  else{wsBadge.classList.remove('clickable');wsBadge.onclick=null;}
+  scheduleChecklistReset();
+  buildSidebar();
+  buildMobNav();
+  go('dashboard');
+}
+
+function buildMobNav(){
+  const nav=$('mobNav');if(!nav)return;
+  // Populate the More drawer based on role
+  const r=ME.role;
+  const moreItems=[];
+  if(r==='admin'){
+    moreItems.push({id:'users',icon:'👥',label:'Users'});
+    moreItems.push({id:'reports',icon:'📊',label:'Reports'});
+    moreItems.push({id:'attendance',icon:'⏱️',label:'Activity'});
+    moreItems.push({id:'hierarchy',icon:'🌳',label:'Team Tree'});
+  } else if(r==='manager'){
+    moreItems.push({id:'reports',icon:'📊',label:'Reports'});
+    moreItems.push({id:'team',icon:'👥',label:'My Team'});
+    moreItems.push({id:'attendance',icon:'⏱️',label:'Activity'});
+  } else {
+    moreItems.push({id:'reports',icon:'📊',label:'Reports'});
+    moreItems.push({id:'attendance',icon:'⏱️',label:'Activity'});
+  }
+  moreItems.push({id:'account',icon:'👤',label:'Account'});
+  const grid=$('mobMoreGrid');
+  if(grid){
+    grid.innerHTML=moreItems.map(it=>`
+      <button onclick="go('${it.id}');closeMobMore()" data-p="${it.id}"
+        style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 8px;border-radius:16px;background:var(--sc);border:none;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--on);font-family:var(--f);transition:background .15s;min-height:76px;justify-content:center;-webkit-tap-highlight-color:transparent"
+        ontouchstart="this.style.background='var(--sch)'" ontouchend="this.style.background='var(--sc)'">
+        <span style="font-size:22px">${it.icon}</span>
+        ${it.label}
+      </button>`).join('');
+  }
+  // Add logout button at bottom of drawer
+  const drawerEl=$('mobMoreDrawer');
+  if(drawerEl){
+    // Remove old logout if exists
+    const old=drawerEl.querySelector('.mob-logout-btn');if(old)old.remove();
+    const lb=document.createElement('button');
+    lb.className='mob-logout-btn';
+    lb.innerHTML=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out`;
+    lb.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:13px;border:1.5px solid rgba(197,34,31,.2);border-radius:14px;background:var(--rc);color:var(--red);font-size:14px;font-weight:600;font-family:var(--f);cursor:pointer';
+    lb.onclick=()=>{closeMobMore();openLogoutModal();};
+    drawerEl.appendChild(lb);
+  }
+  if(window.innerWidth<=640&&!$('app').classList.contains('hidden')){
+    nav.style.display='flex';
+  }
+  ri();
+}
+
+window.toggleMobMore=function(){
+  const d=$('mobMoreDrawer'),b=$('mobMoreBackdrop');
+  const open=d.style.display!=='none';
+  d.style.display=open?'none':'block';
+  b.style.display=open?'none':'block';
+  const btn=$('mobMoreBtn');
+  if(btn)btn.classList.toggle('on',!open);
+};
+window.closeMobMore=function(){
+  const d=$('mobMoreDrawer'),b=$('mobMoreBackdrop');
+  if(d)d.style.display='none';
+  if(b)b.style.display='none';
+  const btn=$('mobMoreBtn');
+  if(btn)btn.classList.remove('on');
+};
+
+// Handle orientation/resize
+window.addEventListener('resize',()=>{
+  const nav=$('mobNav');if(!nav)return;
+  if(window.innerWidth<=640&&!$('app').classList.contains('hidden')){
+    nav.style.display='flex';
+  } else {
+    nav.style.display='none';
+    closeMobMore();
+  }
+});
+
+// ── SIDEBAR ──
+function buildSidebar(){
+  const r=ME.role;
+  const secs=[{lbl:'Main',items:[
+    {id:'dashboard',icon:'layout-dashboard',label:'Home'},
+    {id:'tasks',icon:'check-square',label:'Tasks'},
+    {id:'checklist',icon:'list-checks',label:'Checklist'},
+    {id:'reports',icon:'bar-chart-2',label:'Reports'},
+    {id:'attendance',icon:'timer',label:'Activity'},
+  ]}];
+  if(r==='admin')secs.push({lbl:'Admin',items:[
+    {id:'users',icon:'users',label:'Users'},
+    {id:'hierarchy',icon:'git-branch',label:'Team Tree'},
+  ]});
+  if(r==='manager')secs.push({lbl:'Manager',items:[
+    {id:'team',icon:'user-check',label:'My Team'},
+  ]});
+  secs.push({lbl:'',items:[{id:'account',icon:'user-circle',label:'Account'}]});
+  $('sbn').innerHTML=secs.map(s=>`
+    <div class="ns">
+      ${s.lbl?`<span class="ns-lbl">${s.lbl}</span>`:''}
+      ${s.items.map(i=>`<div class="ni" data-p="${i.id}" onclick="go('${i.id}')">${ic(i.icon)}<span>${i.label}</span><span id="nb-${i.id}" class="ni-bd" style="display:none"></span></div>`).join('')}
+    </div>`).join('');
+  ri();
+}
+
+// ── NAVIGATE ──
+window.go=function(page){
+  pg=page;
+  document.querySelectorAll('.ni').forEach(el=>el.classList.toggle('on',el.dataset.p===page));
+  document.querySelectorAll('.mob-nav-btn[data-p]').forEach(el=>el.classList.toggle('on',el.dataset.p===page));
+  // sync more drawer buttons
+  document.querySelectorAll('#mobMoreGrid button[data-p]').forEach(el=>el.style.background=el.dataset.p===page?'var(--pc)':'var(--sc)');
+  const T={dashboard:'Home',tasks:'Tasks',checklist:'Daily Checklist',users:'Users',hierarchy:'Team Structure',attendance:'Activity',reports:'Reports',team:'My Team',seed:'Demo Data',account:'Account'};
+  $('tbt').textContent=T[page]||page;
+  // scroll content to top on page change
+  const ct=$('mc');if(ct)ct.scrollTop=0;
+  render(page);
+  ri();
+};
+function render(page){
+  const c=$('mc'),r=ME.role;
+  switch(page){
+    case 'dashboard':r==='admin'?pgAdmin(c):r==='manager'?pgMgr(c):pgMember(c);break;
+    case 'tasks':pgTasks(c);break;
+    case 'checklist':pgChecklist(c);break;
+    case 'users':r==='admin'&&pgUsers(c);break;
+    case 'hierarchy':r==='admin'&&pgHierarchy(c);break;
+    case 'attendance':pgAtt(c);break;
+    case 'reports':pgReports(c);break;
+    case 'team':r==='manager'&&pgTeam(c);break;
+    case 'seed':r==='admin'&&pgSeed(c);break;
+    case 'account':pgAccount(c);break;
+    default:c.innerHTML='';
+  }
+  ri();
+}
+
+// ── LISTENERS ──
+// FIX: Tasks visible if assigned_to includes ME.id OR assigned_by == ME.id
+function startListeners(){
+  unsubs.forEach(u=>u&&u());unsubs=[];
+
+  // Users
+  unsubs.push(onSnapshot(collection(db,'users'),sn=>{
+    allUsers=sn.docs.map(d=>({id:d.id,...d.data()}));if(pg)render(pg);
+  }));
+
+  // Workspaces live
+  unsubs.push(onSnapshot(collection(db,'workspaces'),sn=>{
+    allWorkspaces=sn.docs.map(d=>({id:d.id,...d.data()}));
+    if(CWS){const u=allWorkspaces.find(w=>w.id===CWS.id);if(u)CWS=u;}
+    if($('sbWsName')&&CWS)$('sbWsName').textContent=CWS.name;
+  }));
+
+  // TASKS — KEY FIX: members see tasks where they are in assignees OR are the creator
+  // We use TWO queries and merge to handle both cases
+  if(ME.role==='admin'){
+    const tq=query(collection(db,'tasks'),orderBy('created_at','desc'));
+    unsubs.push(onSnapshot(tq,sn=>{
+      allTasks=sn.docs.map(d=>({id:d.id,...d.data()}));
+      nBadge();if(pg)render(pg);
+    },_=>{
+      // Fallback: no ordering
+      unsubs.push(onSnapshot(collection(db,'tasks'),sn=>{
+        allTasks=sortC(sn.docs.map(d=>({id:d.id,...d.data()})));
+        nBadge();if(pg)render(pg);
+      }));
+    }));
+  } else {
+    // Query 1: tasks where user is in assignees array
+    const q1=query(collection(db,'tasks'),where('assignees','array-contains',ME.id));
+    // Query 2: tasks created by this user
+    const q2=query(collection(db,'tasks'),where('assigned_by','==',ME.id));
+    // Merge both
+    let tasks1=[],tasks2=[];
+    const merge=()=>{
+      const map={};
+      [...tasks1,...tasks2].forEach(t=>{map[t.id]=t;});
+      allTasks=sortC(Object.values(map));
+      nBadge();if(pg)render(pg);
+    };
+    unsubs.push(onSnapshot(q1,sn=>{tasks1=sn.docs.map(d=>({id:d.id,...d.data()}));merge();},e=>console.warn('q1',e)));
+    unsubs.push(onSnapshot(q2,sn=>{tasks2=sn.docs.map(d=>({id:d.id,...d.data()}));merge();},e=>console.warn('q2',e)));
+  }
+
+  // Attendance
+  if(ME.role!=='member'){
+    unsubs.push(onSnapshot(query(collection(db,'attendance'),where('date','==',today())),sn=>{allAtt=sn.docs.map(d=>({id:d.id,...d.data()}));if(pg)render(pg);}));
+  }
+
+  // Comments
+  unsubs.push(onSnapshot(collection(db,'comments'),sn=>{allComments=sn.docs.map(d=>({id:d.id,...d.data()}));},()=>{}));
+
+  // Notifications
+  unsubs.push(onSnapshot(query(collection(db,'notifications'),where('user_id','==',ME.id)),sn=>{
+    allNotifs=sortC(sn.docs.map(d=>({id:d.id,...d.data()})));
+    renderNotifPanel();nBadge();
+  },()=>{}));
+
+  // Checklists
+  unsubs.push(onSnapshot(collection(db,'checklist_templates'),sn=>{
+    allChecklists=sn.docs.map(d=>({id:d.id,...d.data()}));if(pg==='checklist'||pg==='dashboard')render(pg);
+  },()=>{}));
+
+  // Checkins (daily completions) — UPDATED: uses IST date for 8am reset
+  unsubs.push(onSnapshot(query(collection(db,'checklist_checkins'),where('date','==',todayIST())),sn=>{
+    allCheckins=sn.docs.map(d=>({id:d.id,...d.data()}));
+    if(pg==='checklist'||pg==='dashboard'||pg==='users'||pg==='team')render(pg);
+  },()=>{}));
+}
+
+function nBadge(){
+  const unread=allNotifs.filter(n=>!n.read).length;
+  const dot=$('notifDot');if(dot)dot.style.display=unread>0?'block':'none';
+  const nb=document.querySelector('#nb-checklist');
+  const pending=allChecklists.filter(cl=>cl.assignees?.includes(ME.id)&&!allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===ME.id&&ci.status==='done')).length;
+  if(nb){nb.style.display=pending>0?'inline-block':'none';if(pending>0)nb.textContent=pending;}
+  // Mobile nav badge
+  const mob=$('mob-cl-badge');if(mob){mob.style.display=pending>0?'inline-block':'none';if(pending>0)mob.textContent=pending;}
+}
+
+// ── NOTIFICATIONS ──
+$('notifBtn').addEventListener('click',e=>{
+  e.stopPropagation();
+  const panel=$('notifPanel');
+  notifOpen=!notifOpen;
+  panel.classList.toggle('open',notifOpen);
+});
+function renderNotifPanel(){
+  const list=$('notifList');if(!list)return;
+  if(!allNotifs.length){list.innerHTML='<div class="notif-empty">No notifications yet</div>';return;}
+  list.innerHTML=allNotifs.slice(0,20).map(n=>`
+    <div class="notif-item ${n.read?'':'unread'}" onclick="readNotif('${n.id}','${n.task_id||''}')">
+      <div class="${n.read?'':'notif-dot'}"></div>
+      <div style="flex:1">
+        <div class="notif-txt">${n.message}</div>
+        <div class="notif-time">${fmtDT(n.created_at)}</div>
+      </div>
+    </div>`).join('');
+}
+window.readNotif=async function(nid,taskId){
+  try{await updateDoc(doc(db,'notifications',nid),{read:true});}catch{}
+  if(taskId)viewTask(taskId);
+};
+window.clearNotifs=async function(){
+  for(const n of allNotifs){try{await updateDoc(doc(db,'notifications',n.id),{read:true});}catch{}}
+};
+async function sendNotif(userId,message,taskId=''){
+  if(userId===ME.id)return;
+  try{await addDoc(collection(db,'notifications'),{user_id:userId,message,task_id:taskId,read:false,created_at:serverTimestamp()});}catch{}
+}
+
+// ══════════════════════════════════════
+// PAGES
+// ══════════════════════════════════════
+
+// ── ADMIN DASHBOARD ──
+function pgAdmin(c){
+  const tmem=allUsers.filter(u=>u.role==='member').length;
+  const ta=allTasks.filter(t=>t.status==='active').length;
+  const td=allTasks.filter(t=>t.status==='done').length;
+  const tp=allTasks.filter(t=>!t.status||t.status==='pending').length;
+  const clDone=allCheckins.filter(ci=>ci.status==='done'&&ci.date===todayIST()).length;
+  const online=allUsers.filter(u=>allAtt.some(a=>a.user_id===u.id&&!a.logout_time)).length;
+  const h=new Date().getHours();
+  const greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  c.innerHTML=`
+  <div style="margin-bottom:22px">
+    <div style="font-size:21px;font-weight:700;letter-spacing:-.3px;margin-bottom:3px">${greet} 👋</div>
+    <div style="font-size:14px;color:var(--om)">${new Date().toLocaleDateString('en-IN',{weekday:'long',month:'long',day:'numeric'})} · ${CWS?.name||'—'}</div>
+  </div>
+  <div class="sg">
+    ${sc('check-square','blue','Total Tasks',allTasks.length,'All tasks','tasks')}
+    ${sc('zap','amb','Active',ta,'In progress','tasks')}
+    ${sc('check-circle','grn','Done',td,'Completed','tasks')}
+    ${sc('list-checks','pur','Checklist',clDone+'/'+allChecklists.length,'Today','checklist')}
+    ${sc('users','teal','Members',tmem,'In workspace','users')}
+    ${sc('wifi','grn','Online',online,'Right now','attendance')}
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px">
+    <button class="btn bf" onclick="openTask()" style="height:50px;border-radius:14px;gap:7px;font-size:14.5px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Task
+    </button>
+    <button class="btn bt" onclick="openCLModal()" style="height:50px;border-radius:14px;gap:7px;font-size:14.5px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>Checklist
+    </button>
+  </div>
+  <div class="sh"><div class="st">Recent Tasks</div><button class="btn bx sm" onclick="go('tasks')">View all →</button></div>
+  <div class="tc-list task-cards-wrap" style="margin-bottom:20px">
+    ${allTasks.slice(0,4).map(t=>dashTaskCard(t)).join('')||`<div class="card card-bd">${emH('inbox','No tasks yet','')}</div>`}
+  </div>
+  <div class="task-table-wrap card" style="margin-bottom:20px">
+    <div class="tw"><table>
+      <thead><tr><th></th><th>Task</th><th>Assignees</th><th>Status</th><th>Priority</th><th></th></tr></thead>
+      <tbody>${allTasks.slice(0,8).map(t=>taskRow(t)).join('')||`<tr><td colspan="6">${emH('inbox','No tasks','')}</td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="sh"><div class="st">Team Online</div><button class="btn bx sm" onclick="go('attendance')">View log →</button></div>
+  <div class="card">${attList(5)}</div>`;
+}
+
+function dashTaskCard(t){
+  const assignees=(t.assignees||[t.assigned_to]).filter(Boolean);
+  return`<div class="tc" onclick="viewTask('${t.id}')" style="cursor:pointer">
+    <div class="tc-top">
+      <div class="pd pd-${t.priority||'normal'}"></div>
+      <div class="tc-t">${t.title}</div>
+      ${sBdg(t.status||'pending')}
+    </div>
+    <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+      ${assignees.slice(0,3).map(uid=>`<div style="display:flex;align-items:center;gap:5px;background:var(--sc);border-radius:99px;padding:3px 9px;font-size:12.5px">${avH(uName(uid),'av-xs')}${uName(uid)}</div>`).join('')}
+      ${pBdg(t.priority)}
+    </div>
+  </div>`;
+}
+
+// ── MANAGER DASHBOARD ──
+function pgMgr(c){
+  const mems=allUsers.filter(u=>u.manager_id===ME.id);
+  const ta=allTasks.filter(t=>t.status==='active').length;
+  const td=allTasks.filter(t=>t.status==='done').length;
+  const tp=allTasks.filter(t=>!t.status||t.status==='pending').length;
+  const clDone=allCheckins.filter(ci=>ci.status==='done'&&ci.date===todayIST()).length;
+  const myTemplates=allChecklists.filter(cl=>cl.created_by===ME.id);
+  const h=new Date().getHours();
+  const greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  c.innerHTML=`
+  <div style="margin-bottom:22px">
+    <div style="font-size:21px;font-weight:700;letter-spacing:-.3px;margin-bottom:3px">${greet} 👋</div>
+    <div style="font-size:14px;color:var(--om)">${CWS?.name||'—'} · ${mems.length} team member${mems.length!==1?'s':''}</div>
+  </div>
+  <div class="sg">
+    ${sc('users','blue','Team',mems.length,'Members','team')}
+    ${sc('check-square','grn','Tasks',allTasks.length,'Total','tasks')}
+    ${sc('zap','amb','Active',ta,'In progress','tasks')}
+    ${sc('list-checks','pur','Checklist',clDone+'/'+myTemplates.length,'Today','checklist')}
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px">
+    <button class="btn bf" onclick="openTask()" style="height:50px;border-radius:14px;gap:7px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Task
+    </button>
+    <button class="btn bt" onclick="go('checklist')" style="height:50px;border-radius:14px;gap:7px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>Checklist
+    </button>
+  </div>
+  <div class="sh"><div class="st">My Tasks</div><button class="btn bx sm" onclick="go('tasks')">View all →</button></div>
+  <div class="tc-list task-cards-wrap" style="margin-bottom:20px">
+    ${allTasks.slice(0,4).map(t=>dashTaskCard(t)).join('')||`<div class="card card-bd">${emH('inbox','No tasks','')}</div>`}
+  </div>
+  <div class="task-table-wrap card" style="margin-bottom:20px">
+    <div class="tw"><table>
+      <thead><tr><th></th><th>Task</th><th>Assignees</th><th>Status</th><th></th></tr></thead>
+      <tbody>${allTasks.slice(0,8).map(t=>taskRow(t)).join('')||`<tr><td colspan="5">${emH('inbox','No tasks','')}</td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="sh"><div class="st">Team Status</div><button class="btn bx sm" onclick="go('team')">View team →</button></div>
+  <div class="card">${attList(0)}</div>`;
+}
+
+// ── MEMBER DASHBOARD ──
+function pgMember(c){
+  const myTasks=allTasks;
+  const ta=myTasks.filter(t=>t.status==='active').length;
+  const td=myTasks.filter(t=>t.status==='done').length;
+  const myCLs=allChecklists.filter(cl=>(cl.assignees||[]).includes(ME.id));
+  const doneToday=allCheckins.filter(ci=>ci.user_id===ME.id&&ci.status==='done'&&ci.date===todayIST()).length;
+  const pct=myCLs.length?Math.round(doneToday/myCLs.length*100):0;
+  const h=new Date().getHours();
+  const greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  c.innerHTML=`
+  <!-- User greeting card -->
+  <div style="background:linear-gradient(135deg,var(--pri) 0%,#3B82F6 100%);border-radius:20px;padding:20px;color:#fff;margin-bottom:18px;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08)"></div>
+    <div style="position:absolute;bottom:-40px;left:-20px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.05)"></div>
+    <div style="position:relative;z-index:1">
+      <div style="font-size:14px;opacity:.8;margin-bottom:4px">${greet}</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-.3px;margin-bottom:12px">${ME.name}</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="background:rgba(255,255,255,.18);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600">${CWS?.name||'—'}</div>
+        <div id="workTimer" class="timer-chip" style="display:none;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff"><span class="timer-dot" style="background:#fff"></span><span id="timerDisplay">0h 0m</span></div>
+      </div>
+    </div>
+  </div>
+  <!-- Stats -->
+  <div class="sg">
+    ${sc('inbox','blue','My Tasks',myTasks.length,'Assigned to me','tasks')}
+    ${sc('zap','amb','Active',ta,'In progress','tasks')}
+    ${sc('check-circle','grn','Done',td,'Completed','tasks')}
+    ${sc('list-checks','pur','Checklist',doneToday+'/'+myCLs.length,'Today','checklist')}
+  </div>
+  <!-- Today's checklist preview -->
+  <div class="sh"><div class="st">Today's Checklist</div><button class="btn bx sm" onclick="go('checklist')">View all →</button></div>
+  <!-- Progress bar -->
+  ${myCLs.length?`<div style="background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);padding:14px 16px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:13.5px;font-weight:600">${doneToday} of ${myCLs.length} done</span>
+      <span style="font-size:13.5px;font-weight:700;color:${pct===100?'var(--grn)':'var(--pri)'}">${pct}%</span>
+    </div>
+    <div class="pb"><div class="pf" style="width:${pct}%;background:${pct===100?'var(--grn)':'var(--pri)'}"></div></div>
+  </div>`:'' }
+  <div style="background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);overflow:hidden;margin-bottom:20px">
+    ${myCLs.length?myCLs.slice(0,4).map(cl=>{
+      const ci=allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===ME.id&&ci.date===todayIST());
+      const done=ci&&ci.status==='done';
+      return`<div onclick="go('checklist')" style="padding:14px 16px;border-bottom:1px solid var(--ov);display:flex;align-items:center;gap:13px;cursor:pointer;transition:background var(--tr)" ontouchstart="this.style.background='var(--sc)'" ontouchend="this.style.background=''">
+        <div style="width:24px;height:24px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${done?'var(--gc)':'var(--sch)'};border:2px solid ${done?'var(--grn)':'var(--out)'}">
+          ${done?`<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><polyline points="2,7 5.5,11 12,3" stroke="var(--grn)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+        </div>
+        <span style="flex:1;font-size:14.5px;font-weight:500;${done?'text-decoration:line-through;color:var(--om)':''}">${cl.title}</span>
+        <span class="bdg ${done?'b-active':'b-pending'}">${done?'Done':'Pending'}</span>
+      </div>`;
+    }).join(''):`<div style="padding:28px;text-align:center;color:var(--om);font-size:14px">No checklists assigned yet</div>`}
+  </div>
+  <!-- My tasks -->
+  <div class="sh"><div class="st">My Tasks</div><button class="btn bx sm" onclick="go('tasks')">View all →</button></div>
+  <div class="tc-list">
+    ${myTasks.slice(0,4).map(t=>memberTaskCard(t)).join('')||`<div class="card card-bd">${emH('inbox','No tasks yet','Tasks assigned to you appear here')}</div>`}
+  </div>`;
+}
+
+function memberTaskCard(t){
+  const assignees=(t.assignees||[t.assigned_to]).filter(Boolean);
+  const isMine=t.assigned_by===ME.id;
+  return`<div class="tc">
+    <div class="tc-top"><div class="pd pd-${t.priority||'normal'}" style="margin-top:5px"></div>
+      <div class="tc-t">${t.title}</div>${sBdg(t.status||'pending')}
+    </div>
+    ${t.description?`<div style="font-size:13px;color:var(--ov2);margin-bottom:7px;line-height:1.5">${t.description}</div>`:''}
+    <div class="tc-meta">
+      ${t.due_date?`<span class="chip">${ic('calendar',11)} ${t.due_date}</span>`:''}
+      <span class="chip">${isMine?ic('corner-right-up',11)+' Created by you':ic('user',11)+' From: '+uName(t.assigned_by)}</span>
+      ${pBdg(t.priority)}
+    </div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:8px">
+      ${assignees.map(uid=>`<div style="display:flex;align-items:center;gap:4px;background:var(--sc);border-radius:20px;padding:2px 7px;font-size:11.5px">${avH(uName(uid),'av-xs')}${uName(uid)}</div>`).join('')}
+    </div>
+    <div class="tc-act">
+      ${t.status!=='done'?`<button class="btn bt sm" onclick="markDone('${t.id}')">${ic('check',12)} Mark Done</button>`:''}
+      <button class="btn bx sm" onclick="viewTask('${t.id}')">${ic('eye',12)} View</button>
+      <button class="ib pri" onclick="openNote('${t.id}')" title="Comment" style="margin-left:auto">${ic('message-circle',14)}</button>
+    </div>
+  </div>`;
+}
+
+function taskRow(t){
+  const assignees=(t.assignees||[t.assigned_to]).filter(Boolean);
+  return`<tr>
+    <td style="width:12px"><div class="pd pd-${t.priority||'normal'}" style="margin:0 auto"></div></td>
+    <td><div style="font-weight:600;font-size:13.5px">${t.title}</div>${t.description?`<div style="font-size:12px;color:var(--om);margin-top:2px">${t.description.slice(0,44)}${t.description.length>44?'…':''}</div>`:''}</td>
+    <td><div style="display:flex;gap:3px;flex-wrap:wrap">${assignees.slice(0,3).map(uid=>avH(uName(uid),'av-xs')).join('')}${assignees.length>3?`<span style="font-size:11px;color:var(--om);padding:0 4px">+${assignees.length-3}</span>`:''}</div></td>
+    <td>${sBdg(t.status||'pending')}</td><td>${pBdg(t.priority)}</td>
+    <td><div class="tda">
+      <button class="ib pri" onclick="viewTask('${t.id}')">${ic('eye',14)}</button>
+      <button class="ib" onclick="editTask('${t.id}')">${ic('pencil',14)}</button>
+      ${t.status!=='done'?`<button class="ib ok" onclick="markDone('${t.id}')">${ic('check',14)}</button>`:''}
+      ${ME.role!=='member'?`<button class="ib dn" onclick="delTask('${t.id}')">${ic('trash-2',14)}</button>`:''}
+    </div></td>
+  </tr>`;
+}
+function pgTasks(c){
+  c.innerHTML=`
+  <div class="sh">
+    <div class="st">Tasks <b>(${allTasks.length})</b></div>
+    <button class="btn bf sm" onclick="openTask()" style="gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Task</button>
+  </div>
+  <div class="fb">
+    <input class="si" id="tSrch" placeholder="Search tasks…" oninput="reTasks()" style="min-width:0;flex:1">
+    <select class="fi" id="tFSt" onchange="reTasks()" style="width:120px;padding:10px 12px;font-size:14px;border-radius:20px"><option value="">All Status</option><option value="pending">Pending</option><option value="active">Active</option><option value="done">Done</option></select>
+    <select class="fi" id="tFPri" onchange="reTasks()" style="width:110px;padding:10px 12px;font-size:14px;border-radius:20px"><option value="">Priority</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option></select>
+  </div>
+  <!-- Desktop table -->
+  <div class="task-table-wrap card">
+    <div class="tw"><table>
+      <thead><tr><th></th><th>Task</th><th>Assignees</th><th>Created By</th><th>Status</th><th>Priority</th><th>Due</th><th></th></tr></thead>
+      <tbody id="taskTbl">${taskRows()}</tbody>
+    </table></div>
+  </div>
+  <!-- Mobile cards -->
+  <div class="task-cards-wrap" id="taskCards">${taskCardsHTML()}</div>`;
+}
+window.reTasks=function(){
+  const el=$('taskTbl');if(el){el.innerHTML=taskRows();ri();}
+  const mc=$('taskCards');if(mc){mc.innerHTML=taskCardsHTML();ri();}
+};
+
+function taskCardsHTML(){
+  let ts=[...allTasks];
+  const s=$('tSrch'),fs=$('tFSt'),fp=$('tFPri');
+  if(s?.value)ts=ts.filter(t=>t.title.toLowerCase().includes(s.value.toLowerCase()));
+  if(fs?.value)ts=ts.filter(t=>(t.status||'pending')===fs.value);
+  if(fp?.value)ts=ts.filter(t=>(t.priority||'normal')===fp.value);
+  if(!ts.length)return emH('search','No tasks match','');
+  return ts.map(t=>{
+    const assignees=(t.assignees||[t.assigned_to]).filter(Boolean);
+    return`<div class="tc">
+      <div class="tc-top">
+        <div class="pd pd-${t.priority||'normal'}" style="margin-top:6px"></div>
+        <div class="tc-t">${t.title}</div>
+        ${sBdg(t.status||'pending')}
+      </div>
+      ${t.description?`<div style="font-size:13.5px;color:var(--ov2);margin-bottom:8px;line-height:1.5">${t.description.slice(0,80)}${t.description.length>80?'…':''}</div>`:''}
+      <div class="tc-meta">
+        ${pBdg(t.priority)}
+        ${t.due_date?`<span class="chip">${ic('calendar',11)} ${t.due_date}</span>`:''}
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
+        ${assignees.slice(0,3).map(uid=>`<div style="display:flex;align-items:center;gap:5px;background:var(--sc);border-radius:20px;padding:3px 9px;font-size:12.5px">${avH(uName(uid),'av-xs')}${uName(uid)}</div>`).join('')}
+        ${assignees.length>3?`<span style="font-size:12px;color:var(--om);padding:0 6px">+${assignees.length-3} more</span>`:''}
+      </div>
+      <div class="tc-act">
+        ${t.status!=='done'?`<button class="btn bt sm" onclick="markDone('${t.id}')" style="gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg> Mark Done</button>`:''}
+        <button class="btn bx sm" onclick="viewTask('${t.id}')" style="gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View</button>
+        <button class="ib" onclick="editTask('${t.id}')" title="Edit" style="margin-left:auto">${ic('pencil',15)}</button>
+        ${ME.role!=='member'?`<button class="ib dn" onclick="delTask('${t.id}')" title="Delete">${ic('trash-2',15)}</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function taskRows(){
+  let ts=[...allTasks];
+  const s=$('tSrch'),fm=$('tFMgr'),fs=$('tFSt'),fp=$('tFPri');
+  if(s?.value)ts=ts.filter(t=>t.title.toLowerCase().includes(s.value.toLowerCase()));
+  if(fm?.value)ts=ts.filter(t=>t.manager_id===fm.value);
+  if(fs?.value)ts=ts.filter(t=>(t.status||'pending')===fs.value);
+  if(fp?.value)ts=ts.filter(t=>(t.priority||'normal')===fp.value);
+  if(!ts.length)return`<tr><td colspan="${ME.role==='admin'?9:8}">${emH('search','No tasks match','')}</td></tr>`;
+  return ts.map(t=>{
+    const assignees=(t.assignees||[t.assigned_to]).filter(Boolean);
+    return`<tr>
+      <td style="width:12px"><div class="pd pd-${t.priority||'normal'}" style="margin:0 auto"></div></td>
+      <td><div style="font-weight:600">${t.title}</div>${t.description?`<div style="font-size:11.5px;color:var(--om)">${t.description.slice(0,44)}${t.description.length>44?'…':''}</div>`:''}</td>
+      <td><div style="display:flex;gap:2px;flex-wrap:wrap">${assignees.slice(0,4).map(uid=>avH(uName(uid),'av-xs')).join('')}${assignees.length>4?`<span style="font-size:11px;color:var(--om);padding:0 4px">+${assignees.length-4}</span>`:''}</div></td>
+      <td style="font-size:12.5px;color:var(--om)">${uName(t.assigned_by)}</td>
+      ${ME.role==='admin'?`<td style="font-size:12px;color:var(--om)">${uName(t.manager_id)||'—'}</td>`:''}
+      <td>${sBdg(t.status||'pending')}</td><td>${pBdg(t.priority)}</td>
+      <td style="font-size:12px;color:var(--om)">${t.due_date||'—'}</td>
+      <td><div class="tda">
+        <button class="ib pri" onclick="viewTask('${t.id}')">${ic('eye',13)}</button>
+        <button class="ib" onclick="editTask('${t.id}')">${ic('pencil',13)}</button>
+        ${t.status!=='done'?`<button class="ib ok" onclick="markDone('${t.id}')">${ic('check',13)}</button>`:''}
+        ${ME.role!=='member'?`<button class="ib dn" onclick="delTask('${t.id}')">${ic('trash-2',13)}</button>`:''}
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── DAILY CHECKLIST PAGE ── New mobile-first card UI
+function pgChecklist(c){
+  const r=ME.role;
+  if(r==='admin'||r==='manager'){
+    // Admin/Manager: templates + per-member tracking view
+    const myTemplates=r==='admin'?allChecklists:allChecklists.filter(cl=>cl.created_by===ME.id);
+    const visibleMembers=r==='admin'?allUsers.filter(u=>u.role==='member'):allUsers.filter(u=>u.role==='member'&&u.manager_id===ME.id);
+    c.innerHTML=`
+    <div style="display:flex;gap:16px;align-items:start;flex-wrap:wrap">
+      <div style="flex:1;min-width:280px">
+        <div class="sh">
+          <div>
+            <div class="st">Checklist Templates</div>
+            <div style="font-size:12px;color:var(--om);margin-top:2px">Resets 8:00 AM IST daily</div>
+          </div>
+          <button class="btn bf sm" onclick="openCLModal()" style="gap:5px">${ic('plus',13,'#fff')} New Item</button>
+        </div>
+        ${myTemplates.length?myTemplates.map(cl=>`
+          <div style="background:var(--surf);border:1.5px solid var(--ov);border-radius:var(--rl);padding:14px 16px;margin-bottom:10px">
+            <div style="display:flex;align-items:flex-start;gap:9px;margin-bottom:8px">
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:14px">${cl.title}</div>
+                ${cl.description?`<div style="font-size:12.5px;color:var(--ov2);margin-top:3px">${cl.description}</div>`:''}
+              </div>
+              <button class="ib dn" onclick="deleteCL('${cl.id}')">${ic('trash-2',13)}</button>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:11px">
+              ${(cl.assignees||[]).map(uid=>`<div style="display:flex;align-items:center;gap:4px;background:var(--sc);border-radius:20px;padding:2px 8px;font-size:12px">${avH(uName(uid),'av-xs')}${uName(uid)}</div>`).join('')}
+            </div>
+            <div style="border-top:1px solid var(--ov);padding-top:10px">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:8px">Today's Status</div>
+              ${(cl.assignees||[]).map(uid=>{
+                const ci=allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===uid&&ci.date===todayIST());
+                const done=ci&&ci.status==='done';
+                const cmtCount=(ci?.comments||[]).length;
+                return`<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--ov)">
+                  <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${done?'var(--gc)':'var(--ov)'}">
+                    ${done?ic('check',11,'var(--grn)'):ic('clock',11,'var(--om)')}
+                  </div>
+                  ${avH(uName(uid),'av-xs')}
+                  <span style="flex:1;font-size:13px;font-weight:500">${uName(uid)}</span>
+                  ${ci?.note?`<span style="font-size:11px;color:var(--om);font-style:italic;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ci.note}">"${ci.note}"</span>`:''}
+                  <span class="bdg ${done?'b-active':'b-pending'}" style="min-width:56px;justify-content:center;font-size:11px">${done?'✓ Done':'Pending'}</span>
+                  <button class="ib pri" onclick="openUserChecklist('${uid}','${cl.id}')" title="Comment" style="width:28px;height:28px">${ic('message-square',13)}<span style="font-size:10px;margin-left:1px">${cmtCount||''}</span></button>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`).join(''):`<div class="card card-bd">${emH('list-checks','No checklist items','Create templates to assign daily tasks to members')}</div>`}
+      </div>
+      <div style="width:260px;min-width:220px">
+        <div class="sh"><div class="st">Today's Summary</div></div>
+        <div class="card card-bd">
+          ${visibleMembers.map(u=>{
+            const assigned=allChecklists.filter(cl=>(cl.assignees||[]).includes(u.id));
+            const done=allCheckins.filter(ci=>ci.user_id===u.id&&ci.status==='done'&&ci.date===todayIST()&&allChecklists.some(cl=>cl.id===ci.checklist_id)).length;
+            const pct=assigned.length?Math.round(done/assigned.length*100):0;
+            return`<div class="cl-member-row" style="cursor:pointer" onclick="openUserChecklistFull('${u.id}')">
+              ${avH(u.name,'av-xs')}
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:500">${u.name}</div>
+                <div class="pb" style="margin-top:4px"><div class="pf" style="width:${pct}%;background:${pct===100?'#137333':'#1A73E8'}"></div></div>
+              </div>
+              <span class="cl-pct" style="color:${pct===100?'var(--grn)':'var(--pri)'}">${done}/${assigned.length}</span>
+            </div>`;
+          }).join('')||'<div style="color:var(--om);font-size:13px;text-align:center;padding:12px">No members yet</div>'}
+        </div>
+      </div>
+    </div>`;
+  } else {
+    // MEMBER — New card-based UI
+    const myCLs=allChecklists.filter(cl=>(cl.assignees||[]).includes(ME.id));
+    const doneCount=myCLs.filter(cl=>{
+      const ci=allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===ME.id&&ci.date===todayIST());
+      return ci&&ci.status==='done';
+    }).length;
+    const pct=myCLs.length?Math.round(doneCount/myCLs.length*100):0;
+    c.innerHTML=`
+    <!-- Progress header card -->
+    <div style="background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);padding:18px;margin-bottom:16px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:16px;font-weight:700;letter-spacing:-.2px">Daily Checklist</div>
+          <div style="font-size:13px;color:var(--om);margin-top:3px">${new Date().toLocaleDateString('en-IN',{weekday:'long',month:'long',day:'numeric'})} · Resets 8 AM IST</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:26px;font-weight:700;color:${pct===100?'var(--grn)':'var(--pri)'};letter-spacing:-.5px">${pct}%</div>
+          <div style="font-size:12.5px;color:var(--om)">${doneCount}/${myCLs.length} done</div>
+        </div>
+      </div>
+      <div class="pb" style="height:8px"><div class="pf" style="width:${pct}%;background:${pct===100?'var(--grn)':'var(--pri)'}"></div></div>
+      ${pct===100?`<div style="margin-top:10px;text-align:center;font-size:14px;font-weight:600;color:var(--grn)">🎉 All tasks complete for today!</div>`:''}
+    </div>
+    ${myCLs.length?`<div class="cl-cards" id="clCardsWrap">${myCLs.map(cl=>renderCLCard(cl)).join('')}</div>`
+    :`<div class="card card-bd">${emH('list-checks','No tasks assigned','Your manager will assign daily checklist items here')}</div>`}`;
+  }
+}
+
+// Render a single checklist card (member view)
+function renderCLCard(cl){
+  const ci=allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===ME.id&&ci.date===todayIST());
+  const isDone=ci&&ci.status==='done';
+  const cmtCount=(ci?.comments||[]).length;
+  const note=ci?.note||'';
+  return`<div class="cl-card ${isDone?'is-done':''}" id="clcard-${cl.id}">
+    <div class="cl-card-main">
+      <div class="cl-check-wrap">
+        <label class="cl-check">
+          <input type="checkbox" ${isDone?'checked':''} onchange="toggleCLCard('${cl.id}',this.checked)">
+          <div class="cl-check-box">
+            <svg class="cl-check-tick" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg">
+              <polyline points="2,7 5.5,11 12,3"/>
+            </svg>
+          </div>
+        </label>
+      </div>
+      <div class="cl-card-body">
+        <div class="cl-card-title">${cl.title}</div>
+        ${cl.description?`<div class="cl-card-desc">${cl.description}</div>`:''}
+        <div class="cl-card-meta">
+          <span class="bdg ${isDone?'b-active':'b-pending'}" style="font-size:11px;padding:2px 8px">${isDone?'✓ Done':'● Pending'}</span>
+          ${cmtCount?`<span class="chip" style="font-size:11px;padding:2px 7px;gap:3px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${cmtCount}</span>`:''}
+        </div>
+      </div>
+      <div class="cl-card-actions">
+        <button class="ib" onclick="toggleCLCmtBox('${cl.id}')" title="Comments" style="position:relative;width:32px;height:32px;border-radius:8px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          ${cmtCount?`<span style="position:absolute;top:-3px;right:-3px;background:var(--pri);color:#fff;font-size:9px;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0 3px;border:2px solid var(--surf)">${cmtCount}</span>`:''}
+        </button>
+      </div>
+    </div>
+    <div class="cl-note-wrap">
+      <input type="text" class="cl-note-input" id="clnote-${cl.id}"
+        value="${note.replace(/"/g,'&quot;')}"
+        placeholder="Add a note…"
+        oninput="scheduleSaveNote('${cl.id}',this)">
+    </div>
+    <div class="cl-cmt-wrap" id="clcmtbox-${cl.id}" style="display:none">
+      <div class="cl-cmt-inner">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:9px;display:flex;align-items:center;gap:5px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Comments
+        </div>
+        <div class="cl-cmt-list" id="clcmtlist-${cl.id}">
+          ${renderMyCmts(ci?.comments||[])}
+        </div>
+        <div class="cl-cmt-row">
+          <input class="cl-cmt-input" id="clinput-${cl.id}" placeholder="Write a comment…"
+            onkeypress="if(event.key==='Enter')addCLComment('${cl.id}')">
+          <button class="btn bf sm" onclick="addCLComment('${cl.id}')">Post</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderMyCmts(comments){
+  if(!comments||!comments.length)return`<div style="color:var(--om);font-size:12.5px;text-align:center;padding:10px 0">No comments yet</div>`;
+  return comments.map(cm=>{
+    const mine=cm.uid===ME.id;
+    return`<div class="cl-cmt-item" style="${mine?'flex-direction:row-reverse':''}">
+      ${avH(uName(cm.uid),'av-xs')}
+      <div class="cl-cmt-bubble ${mine?'mine':''}">
+        <div class="cl-cmt-author">${uName(cm.uid)} · ${cm.time?new Date(cm.time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''}</div>
+        <div>${cm.text}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleCLCard=async function(clId,checked){
+  const card=$('clcard-'+clId);
+  const newStatus=checked?'done':'pending';
+  if(card){
+    card.classList.toggle('is-done',checked);
+    const title=card.querySelector('.cl-card-title');
+    if(title){title.style.textDecoration=checked?'line-through':'';title.style.color=checked?'var(--om)':'';}
+    const bdg=card.querySelector('.cl-card-meta .bdg');
+    if(bdg){bdg.className=`bdg ${checked?'b-active':'b-pending'}`;bdg.textContent=checked?'✓ Done':'Pending';}
+  }
+  const existing=allCheckins.find(ci=>ci.checklist_id===clId&&ci.user_id===ME.id&&ci.date===todayIST());
+  try{
+    if(existing){await updateDoc(doc(db,'checklist_checkins',existing.id),{status:newStatus,updated_at:serverTimestamp()});}
+    else{await addDoc(collection(db,'checklist_checkins'),{checklist_id:clId,user_id:ME.id,date:todayIST(),status:newStatus,note:'',comments:[],created_at:serverTimestamp()});}
+    toast(newStatus==='done'?'✓ Marked done!':'Marked pending','ok');
+    nBadge();
+  }catch(e){toast('Failed: '+e.message,'err');}
+};
+
+window.toggleCLCmtBox=function(clId){
+  const box=$('clcmtbox-'+clId);
+  if(!box)return;
+  const open=box.style.display!=='none';
+  box.style.display=open?'none':'block';
+  if(!open){const inp=$('clinput-'+clId);if(inp)setTimeout(()=>inp.focus(),60);}
+};
+
+// Keep old toggleCLTable for backward compat
+window.toggleCLTable=window.toggleCLCard;
+
+// UPDATED: toggleCL now uses todayIST (kept for backward compat from dashboard quick view)
+window.toggleCL=async function(clId,newStatus){
+  const existing=allCheckins.find(ci=>ci.checklist_id===clId&&ci.user_id===ME.id&&ci.date===todayIST());
+  try{
+    if(existing){await updateDoc(doc(db,'checklist_checkins',existing.id),{status:newStatus,updated_at:serverTimestamp()});}
+    else{await addDoc(collection(db,'checklist_checkins'),{checklist_id:clId,user_id:ME.id,date:todayIST(),status:newStatus,note:'',comments:[],created_at:serverTimestamp()});}
+    toast(newStatus==='done'?'Marked as done!':'Marked as pending','ok');
+  }catch(e){toast('Failed: '+e.message,'err');}
+};
+
+// NEW: Auto-save note with debounce
+const _noteSaveTimers={};
+window.scheduleSaveNote=function(clId,inputEl){
+  inputEl.classList.add('cl-note-saving');
+  clearTimeout(_noteSaveTimers[clId]);
+  _noteSaveTimers[clId]=setTimeout(()=>saveNote(clId,inputEl),900);
+};
+async function saveNote(clId,inputEl){
+  const note=inputEl.value.trim();
+  const existing=allCheckins.find(ci=>ci.checklist_id===clId&&ci.user_id===ME.id&&ci.date===todayIST());
+  try{
+    if(existing){await updateDoc(doc(db,'checklist_checkins',existing.id),{note,updated_at:serverTimestamp()});}
+    else{await addDoc(collection(db,'checklist_checkins'),{checklist_id:clId,user_id:ME.id,date:todayIST(),status:'pending',note,comments:[],created_at:serverTimestamp()});}
+    inputEl.classList.remove('cl-note-saving');inputEl.classList.add('cl-note-saved');
+    setTimeout(()=>inputEl.classList.remove('cl-note-saved'),1200);
+  }catch(e){inputEl.classList.remove('cl-note-saving');toast('Note save failed','err');}
+}
+
+// UPDATED: addCLComment uses todayIST + updates card UI
+window.addCLComment=async function(clId){
+  const input=$('clinput-'+clId);
+  if(!input||!input.value.trim())return;
+  const text=input.value.trim();
+  const existing=allCheckins.find(ci=>ci.checklist_id===clId&&ci.user_id===ME.id&&ci.date===todayIST());
+  try{
+    const newCmt={uid:ME.id,text,time:new Date().toISOString()};
+    if(existing){
+      await updateDoc(doc(db,'checklist_checkins',existing.id),{comments:arrayUnion(newCmt)});
+    }else{
+      await addDoc(collection(db,'checklist_checkins'),{checklist_id:clId,user_id:ME.id,date:todayIST(),status:'pending',note:'',comments:[newCmt],created_at:serverTimestamp()});
+    }
+    input.value='';
+    // Optimistic update card comment list
+    const listEl=$('clcmtlist-'+clId);
+    if(listEl){
+      const ph=listEl.querySelector('[style*="No comments"]');if(ph)ph.remove();
+      const div=document.createElement('div');
+      div.className='cl-cmt-item';div.style='flex-direction:row-reverse';
+      div.innerHTML=`${avH(ME.name,'av-xs')}<div class="cl-cmt-bubble mine"><div class="cl-cmt-author">${ME.name} · just now</div><div>${text}</div></div>`;
+      listEl.appendChild(div);listEl.scrollTop=listEl.scrollHeight;
+    }
+    toast('Comment posted!','ok');
+  }catch(e){toast('Failed: '+e.message,'err');}
+};
+
+window.deleteCL=async function(id){
+  if(!confirm('Delete this checklist item?'))return;
+  try{await deleteDoc(doc(db,'checklist_templates',id));toast('Deleted','ok');}catch(e){toast('Failed','err');}
+};
+
+// NEW: Open modal showing a specific user's checklist item + comment thread (Admin/Manager)
+window.openUserChecklist=function(uid,clId){
+  const u=uById(uid);const cl=allChecklists.find(c=>c.id===clId);
+  if(!u||!cl)return;
+  const ci=allCheckins.find(ci=>ci.checklist_id===clId&&ci.user_id===uid&&ci.date===todayIST());
+  const isDone=ci&&ci.status==='done';
+  $('mUCmtTitle').textContent=u.name+"'s Checklist";
+  $('mUCmtSub').textContent=`Task: ${cl.title} · ${new Date().toLocaleDateString('en-IN',{weekday:'long',month:'long',day:'numeric'})}`;
+  $('mUCmtBody').innerHTML=`
+    <!-- Status row -->
+    <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--ov);margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:9px">
+        ${avH(u.name,'av-md')}
+        <div>
+          <div style="font-weight:700;font-size:14px">${u.name}</div>
+          <div style="font-size:12px;color:var(--om)">${u.email||''}</div>
+        </div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        ${isDone?'<span class="bdg b-active" style="padding:5px 12px">✓ Done</span>':'<span class="bdg b-pending" style="padding:5px 12px">Pending</span>'}
+        ${ci?.note?`<span style="font-size:12px;color:var(--ov2);font-style:italic;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${ci.note}"</span>`:''}
+      </div>
+    </div>
+    <!-- Comment thread -->
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:10px">${ic('message-square',13,'var(--om)')} Comment Thread</div>
+    <div class="ucmt-list" id="ucmtList-${uid}-${clId}">
+      ${renderUCmtList(ci?.comments||[])}
+    </div>
+    <!-- Post comment -->
+    <div class="ucmt-input-row" style="margin-top:10px">
+      <input class="ucmt-input" id="ucmt-inp-${uid}-${clId}" placeholder="Write a comment to ${u.name}…"
+        onkeypress="if(event.key==='Enter')postUCmt('${uid}','${clId}')">
+      <button class="btn bf sm" onclick="postUCmt('${uid}','${clId}')" style="flex-shrink:0">Post</button>
+    </div>`;
+  openM('mUCmt');ri();
+};
+
+// Open full checklist for a user — all their tasks for today (card view)
+window.openUserChecklistFull=function(uid){
+  const u=uById(uid);if(!u)return;
+  const myCLs=allChecklists.filter(cl=>(cl.assignees||[]).includes(uid));
+  const doneCount=myCLs.filter(cl=>{const ci=allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===uid&&ci.date===todayIST());return ci&&ci.status==='done';}).length;
+  const pct=myCLs.length?Math.round(doneCount/myCLs.length*100):0;
+  $('mUCmtTitle').textContent=u.name+"'s Checklist";
+  $('mUCmtSub').textContent=`${doneCount}/${myCLs.length} done · ${new Date().toLocaleDateString('en-IN',{weekday:'long',month:'long',day:'numeric'})}`;
+  $('mUCmtBody').innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--ov)">
+      ${avH(u.name,'av-md')}
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px">${u.name}</div>
+        <div class="pb" style="margin-top:5px"><div class="pf" style="width:${pct}%;background:${pct===100?'#137333':'#1A73E8'}"></div></div>
+      </div>
+      <span style="font-size:15px;font-weight:700;color:${pct===100?'var(--grn)':'var(--pri)'}">${doneCount}/${myCLs.length}</span>
+    </div>
+    ${myCLs.length?myCLs.map(cl=>{
+      const ci=allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===uid&&ci.date===todayIST());
+      const isDone=ci&&ci.status==='done';
+      const cmtCount=(ci?.comments||[]).length;
+      return`<div style="display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--ov)">
+        <div style="width:22px;height:22px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${isDone?'var(--gc)':'var(--sch)'};border:2px solid ${isDone?'var(--grn)':'var(--out)'}">
+          ${isDone?`<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polyline points="1.5,6 4.5,9.5 10.5,2.5" stroke="var(--grn)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13.5px;${isDone?'text-decoration:line-through;color:var(--om)':''}">${cl.title}</div>
+          ${cl.description?`<div style="font-size:12px;color:var(--om);margin-top:2px">${cl.description}</div>`:''}
+          ${ci?.note?`<div style="font-size:11.5px;color:var(--ov2);margin-top:3px;font-style:italic">"${ci.note}"</div>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span class="bdg ${isDone?'b-active':'b-pending'}" style="font-size:11px">${isDone?'✓ Done':'Pending'}</span>
+          <button class="ib pri" onclick="openUserChecklist('${uid}','${cl.id}')" style="width:28px;height:28px;position:relative">
+            ${ic('message-square',13)}
+            ${cmtCount?`<span style="position:absolute;top:-2px;right:-2px;background:var(--pri);color:#fff;font-size:9px;width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700">${cmtCount}</span>`:''}
+          </button>
+        </div>
+      </div>`;
+    }).join(''):`<div style="padding:24px;text-align:center;color:var(--om);font-size:13px">No checklist tasks assigned</div>`}`;
+  openM('mUCmt');ri();
+};
+
+// NEW: Render user comment list HTML
+function renderUCmtList(comments){
+  if(!comments||!comments.length)return'<div style="color:var(--om);font-size:13px;text-align:center;padding:20px">No comments yet</div>';
+  return comments.map(cm=>{
+    const isMine=cm.uid===ME.id;
+    return`<div class="ucmt-item ${isMine?'ucmt-mine':''}">
+      ${avH(uName(cm.uid),'av-xs')}
+      <div class="ucmt-bubble">
+        <div class="ucmt-meta">${uName(cm.uid)} · ${cm.time?new Date(cm.time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''}</div>
+        <div>${cm.text}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// NEW: Post comment from Admin/Manager to a user's checklist item
+window.postUCmt=async function(uid,clId){
+  const inp=$(`ucmt-inp-${uid}-${clId}`);
+  if(!inp||!inp.value.trim())return;
+  const text=inp.value.trim();
+  // The comment is stored in the user's checkin record for that item
+  const existing=allCheckins.find(ci=>ci.checklist_id===clId&&ci.user_id===uid&&ci.date===todayIST());
+  const newCmt={uid:ME.id,text,time:new Date().toISOString()};
+  try{
+    if(existing){
+      await updateDoc(doc(db,'checklist_checkins',existing.id),{comments:arrayUnion(newCmt)});
+    }else{
+      // Create a checkin record for the user if one doesn't exist
+      await addDoc(collection(db,'checklist_checkins'),{checklist_id:clId,user_id:uid,date:todayIST(),status:'pending',note:'',comments:[newCmt],created_at:serverTimestamp()});
+    }
+    inp.value='';
+    // Notify the user
+    await sendNotif(uid,`${ME.name} commented on your checklist: "${allChecklists.find(c=>c.id===clId)?.title||'item'}"`,clId);
+    // Optimistic UI
+    const listEl=$(`ucmtList-${uid}-${clId}`);
+    if(listEl){
+      const div=document.createElement('div');div.className='ucmt-item ucmt-mine';
+      div.innerHTML=`${avH(ME.name,'av-xs')}<div class="ucmt-bubble"><div class="ucmt-meta">${ME.name} · just now</div><div>${text}</div></div>`;
+      listEl.appendChild(div);listEl.scrollTop=listEl.scrollHeight;
+      // Remove "no comments" placeholder
+      const ph=listEl.querySelector('[style*="No comments"]');if(ph)ph.remove();
+    }
+    toast('Comment posted!','ok');
+  }catch(e){toast('Failed: '+e.message,'err');}
+};
+
+// ── CHECKLIST MODAL ──
+window.openCLModal=function(){
+  $('cl_id').value='';$('cl_title').value='';$('cl_desc').value='';
+  const list=$('cl_to_list');
+  list.innerHTML=allUsers.filter(u=>u.role==='member').map(u=>`
+    <div class="multi-sel-item" onclick="toggleMSel(this,'${u.id}')">
+      <input type="checkbox" value="${u.id}">
+      ${avH(u.name,'av-xs')}<span>${u.name}</span>
+    </div>`).join('');
+  $('mCLTitle').textContent='New Checklist Item';$('cl_sub').textContent='Create';
+  $('cl_sub').onclick=doCreateCL;
+  openM('mCL');
+};
+
+async function doCreateCL(){
+  const title=$('cl_title').value.trim();
+  if(!title){toast('Title required','err');return;}
+  const assignees=[...document.querySelectorAll('#cl_to_list input:checked')].map(el=>el.value);
+  if(!assignees.length){toast('Assign to at least one member','err');return;}
+  const btn=$('cl_sub');btn.disabled=true;btn.textContent='Saving…';
+  try{
+    await addDoc(collection(db,'checklist_templates'),{
+      title,description:$('cl_desc').value.trim(),assignees,
+      created_by:ME.id,workspace_id:CWS?CWS.id:'',created_at:serverTimestamp()
+    });
+    closeM('mCL');toast('Checklist item created!','ok');
+  }catch(e){toast('Failed: '+e.message,'err');}
+  btn.disabled=false;btn.textContent='Create';
+}
+
+// ── USERS PAGE ── // UPDATED: added per-user checklist + comment section
+function pgUsers(c){
+  c.innerHTML=`
+  <div class="info-box">${ic('info',14,'var(--pri)')}<span>Add users via <b>Firebase Auth console</b> → first person = Admin → members select permanent workspace on first login. Admin can override workspace below.</span></div>
+  <div class="sh"><div class="st">All Users <b>(${allUsers.length})</b></div></div>
+  <div class="fb">
+    <input class="si" id="uSrch" placeholder="Search…" oninput="reUsers()" style="max-width:260px">
+    <select class="fi" id="uFR" onchange="reUsers()" style="width:130px;padding:7px 11px;border-radius:20px"><option value="">All Roles</option><option value="admin">Admin</option><option value="manager">Manager</option><option value="member">Member</option></select>
+  </div>
+  <div class="card" style="margin-bottom:16px"><div class="tw"><table>
+    <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Workspace</th><th>Tasks</th><th>Status</th><th>Checklist</th><th></th></tr></thead>
+    <tbody id="uTbl">${userRows()}</tbody>
+  </table></div></div>
+  <!-- NEW: Per-member checklist panel -->
+  <div class="sh"><div class="st">Daily Checklist — Member Overview</div><div style="font-size:12px;color:var(--om)">Resets at 8:00 AM IST</div></div>
+  <div id="memberCLPanels">
+    ${renderMemberCLPanels()}
+  </div>`;
+}
+window.reUsers=function(){
+  const el=$('uTbl');if(el){el.innerHTML=userRows();ri();}
+  const panels=$('memberCLPanels');if(panels){panels.innerHTML=renderMemberCLPanels();ri();}
+};
+
+// NEW: Render expandable per-member checklist panels with comment sections
+function renderMemberCLPanels(){
+  const members=allUsers.filter(u=>u.role==='member');
+  if(!members.length)return`<div class="card card-bd" style="text-align:center;color:var(--om);font-size:13px">No members yet</div>`;
+  return members.map(u=>{
+    const assigned=allChecklists.filter(cl=>(cl.assignees||[]).includes(u.id));
+    const doneCount=allCheckins.filter(ci=>ci.user_id===u.id&&ci.status==='done'&&ci.date===todayIST()&&allChecklists.some(cl=>cl.id===ci.checklist_id)).length;
+    const pct=assigned.length?Math.round(doneCount/assigned.length*100):0;
+    const att=allAtt.find(a=>a.user_id===u.id),online=att&&!att.logout_time;
+    return`<div class="ucl-panel" id="uclp-${u.id}">
+      <div class="ucl-header" onclick="toggleUCLPanel('${u.id}')">
+        ${avH(u.name,'av-sm')}
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:13.5px">${u.name}</div>
+          <div style="font-size:11.5px;color:var(--om)">${u.email||''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="${online?'don':'doff'}" title="${online?'Online':'Offline'}"></div>
+          <span class="bdg ${pct===100&&assigned.length?'b-active':'b-pending'}" style="min-width:70px;justify-content:center">${doneCount}/${assigned.length} done</span>
+          <div class="pb" style="width:80px;margin:0"><div class="pf" style="width:${pct}%;background:${pct===100?'#137333':'#1A73E8'}"></div></div>
+          <i data-lucide="chevron-down" class="ucl-chevron" id="uclchev-${u.id}" style="width:15px;height:15px;stroke:var(--om);stroke-width:2;flex-shrink:0"></i>
+        </div>
+      </div>
+      <div class="ucl-body" id="uclbody-${u.id}" style="display:none">
+        ${renderUCLBody(u,assigned)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// NEW: Render the body of a user's checklist panel
+function renderUCLBody(u,assigned){
+  if(!assigned.length)return`<div style="padding:20px;text-align:center;color:var(--om);font-size:13px">No checklist tasks assigned to ${u.name}</div>`;
+  return assigned.map(cl=>{
+    const ci=allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===u.id&&ci.date===todayIST());
+    const isDone=ci&&ci.status==='done';
+    const comments=ci?.comments||[];
+    return`<div style="border-bottom:1px solid var(--ov)">
+      <!-- Task row -->
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 16px">
+        <span class="bdg ${isDone?'b-active':'b-pending'}" style="min-width:70px;justify-content:center">${isDone?'✓ Done':'Pending'}</span>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:13.5px">${cl.title}</div>
+          ${cl.description?`<div style="font-size:12px;color:var(--om)">${cl.description}</div>`:''}
+          ${ci?.note?`<div style="font-size:12px;color:var(--ov2);font-style:italic;margin-top:2px">${ic('file-text',11,'var(--om)')} ${ci.note}</div>`:''}
+        </div>
+        <button class="btn bx sm" onclick="toggleAdminCmtThread('${u.id}','${cl.id}')" style="gap:4px;font-size:12px">
+          ${ic('message-circle',13,'var(--om)')} ${comments.length?comments.length+' comment'+(comments.length>1?'s':''):'Comment'}
+        </button>
+      </div>
+      <!-- Comment thread (hidden by default) -->
+      <div id="admcmt-${u.id}-${cl.id}" style="display:none">
+        <div class="ucmt-section">
+          <div class="ucmt-list" id="admcmtlist-${u.id}-${cl.id}" style="max-height:180px">
+            ${renderUCmtList(comments)}
+          </div>
+          <div class="ucmt-input-row">
+            ${avH(ME.name,'av-xs')}
+            <input class="ucmt-input" id="admcmtinp-${u.id}-${cl.id}" placeholder="Write to ${u.name} about "${cl.title}"…"
+              onkeypress="if(event.key==='Enter')postAdminCmt('${u.id}','${cl.id}')">
+            <button class="btn bf sm" onclick="postAdminCmt('${u.id}','${cl.id}')" style="flex-shrink:0">Post</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// NEW: Toggle individual user checklist panel
+window.toggleUCLPanel=function(uid){
+  const body=$('uclbody-'+uid),chev=$('uclchev-'+uid);
+  if(!body)return;
+  const open=body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if(chev)chev.classList.toggle('open',!open);
+  // Re-render body on open to get fresh data
+  if(!open){
+    const u=uById(uid);if(!u)return;
+    const assigned=allChecklists.filter(cl=>(cl.assignees||[]).includes(uid));
+    body.innerHTML=renderUCLBody(u,assigned);
+    ri();
+  }
+};
+
+// NEW: Toggle comment thread inside a panel
+window.toggleAdminCmtThread=function(uid,clId){
+  const el=$(`admcmt-${uid}-${clId}`);
+  if(!el)return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(!open){const inp=$(`admcmtinp-${uid}-${clId}`);if(inp)setTimeout(()=>inp.focus(),50);}
+};
+
+// NEW: Post comment from admin/manager panel in users page
+window.postAdminCmt=async function(uid,clId){
+  const inp=$(`admcmtinp-${uid}-${clId}`);
+  if(!inp||!inp.value.trim())return;
+  const text=inp.value.trim();
+  const existing=allCheckins.find(ci=>ci.checklist_id===clId&&ci.user_id===uid&&ci.date===todayIST());
+  const newCmt={uid:ME.id,text,time:new Date().toISOString()};
+  try{
+    if(existing){await updateDoc(doc(db,'checklist_checkins',existing.id),{comments:arrayUnion(newCmt)});}
+    else{await addDoc(collection(db,'checklist_checkins'),{checklist_id:clId,user_id:uid,date:todayIST(),status:'pending',note:'',comments:[newCmt],created_at:serverTimestamp()});}
+    inp.value='';
+    await sendNotif(uid,`${ME.name} commented on your checklist: "${allChecklists.find(c=>c.id===clId)?.title||'item'}"`,clId);
+    // Optimistic UI
+    const listEl=$(`admcmtlist-${uid}-${clId}`);
+    if(listEl){
+      const ph=listEl.querySelector('[style*="No comments"]');if(ph)ph.remove();
+      const div=document.createElement('div');div.className='ucmt-item ucmt-mine';
+      div.innerHTML=`${avH(ME.name,'av-xs')}<div class="ucmt-bubble"><div class="ucmt-meta">${ME.name} · just now</div><div>${text}</div></div>`;
+      listEl.appendChild(div);listEl.scrollTop=listEl.scrollHeight;
+    }
+    toast('Comment posted!','ok');
+  }catch(e){toast('Failed: '+e.message,'err');}
+};
+function userRows(){
+  let us=[...allUsers];
+  const s=$('uSrch'),r=$('uFR');
+  if(s?.value)us=us.filter(u=>((u.name||'')+(u.email||'')).toLowerCase().includes(s.value.toLowerCase()));
+  if(r?.value)us=us.filter(u=>u.role===r.value);
+  if(!us.length)return`<tr><td colspan="8">${emH('users','No users found','')}</td></tr>`;
+  return us.map(u=>{
+    const tc=allTasks.filter(t=>(t.assignees||[t.assigned_to]).includes(u.id)).length;
+    const att=allAtt.find(a=>a.user_id===u.id),on=att&&!att.logout_time;
+    const isSelf=u.id===ME.id;
+    const ws=allWorkspaces.find(w=>w.id===u.workspace_id);
+    // NEW: checklist stats for member
+    const clAssigned=u.role==='member'?allChecklists.filter(cl=>(cl.assignees||[]).includes(u.id)).length:0;
+    const clDone=u.role==='member'?allCheckins.filter(ci=>ci.user_id===u.id&&ci.status==='done'&&ci.date===todayIST()).length:0;
+    return`<tr>
+      <td><div style="display:flex;align-items:center;gap:8px">${avH(u.name,'av-sm')}<div><div style="font-weight:600">${u.name}</div>${isSelf?'<div style="font-size:10px;font-weight:700;color:var(--pri);letter-spacing:.04em">YOU</div>':''}</div></div></td>
+      <td style="font-size:12.5px;color:var(--om)">${u.email||'—'}</td>
+      <td>${isSelf?rBdg(u.role):`<select class="fi" style="padding:3px 7px;font-size:12.5px;width:108px;border-radius:20px" onchange="changeRole('${u.id}',this.value,this)"><option value="member" ${u.role==='member'?'selected':''}>Member</option><option value="manager" ${u.role==='manager'?'selected':''}>Manager</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select>`}</td>
+      <td>${ws?`<div style="display:flex;align-items:center;gap:5px;font-size:13px"><span>${ws.icon||'🏢'}</span><span>${ws.name}</span></div>`:'<span style="color:var(--om);font-size:12px">Not set</span>'}</td>
+      <td><span class="chip">${ic('check-square',11)} ${tc}</span></td>
+      <td><div style="display:flex;align-items:center;gap:5px"><div class="${on?'don':'doff'}"></div><span style="font-size:12px;color:${on?'var(--grn)':'var(--om)'}">${on?'Online':'Offline'}</span></div></td>
+      <!-- NEW: Checklist column -->
+      <td>${u.role==='member'?`<button class="btn bx sm" onclick="openUserChecklistFull('${u.id}')" style="gap:4px;font-size:12px" title="View ${u.name}'s checklist">${ic('list-checks',13,'var(--om)')} <span class="${clDone===clAssigned&&clAssigned>0?'':''}"><b style="color:${clDone===clAssigned&&clAssigned?'var(--grn)':'var(--pri)'}">${clDone}</b>/${clAssigned}</span></button>`:'<span style="color:var(--out);font-size:12px">—</span>'}</td>
+      <td><div class="tda"><button class="ib" onclick="openEditUser('${u.id}')">${ic('pencil',13)}</button>${!isSelf?`<button class="ib dn" onclick="delUser('${u.id}','${u.name}')">${ic('trash-2',13)}</button>`:''}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── HIERARCHY ──
+function pgHierarchy(c){
+  const admins=allUsers.filter(u=>u.role==='admin'),mgrs=allUsers.filter(u=>u.role==='manager'),mems=allUsers.filter(u=>u.role==='member');
+  c.innerHTML=`<div class="sh"><div class="st">Team Hierarchy</div></div>
+  <div class="card card-bd">
+    ${admins.map(a=>`
+      <div class="tr-admin">${avH(a.name,'av-md')}<div><div style="font-weight:700;font-size:14px">${a.name}</div><div style="font-size:12px;opacity:.7">${a.email||''}</div></div>${rBdg('admin')}<span class="chip" style="margin-left:auto">${allTasks.length} tasks</span></div>
+      <div class="tr-mgrl">
+        ${mgrs.length?mgrs.map(m=>`<div><div class="tr-mgr">${avH(m.name,'av-sm')}<div style="flex:1"><div style="font-weight:600;font-size:13px">${m.name}</div><div style="font-size:11.5px;color:var(--om)">${m.email||''}</div></div>${rBdg('manager')}<span class="chip">${mems.filter(x=>x.manager_id===m.id).length} members</span></div>
+          <div class="tr-meml">${mems.filter(x=>x.manager_id===m.id).map(mem=>`<div class="tr-mem">${avH(mem.name,'av-xs')}<span style="flex:1;font-weight:500">${mem.name}</span><span style="font-size:11px;color:var(--om)">${mem.email||''}</span>${rBdg('member')}<span class="chip" style="margin-left:auto">${allTasks.filter(t=>(t.assignees||[]).includes(mem.id)).length} tasks</span></div>`).join('')||'<div style="font-size:12.5px;color:var(--om);padding:5px">No members</div>'}</div></div>`).join(''):'<div style="font-size:13px;color:var(--om);padding:8px 0">No managers yet</div>'}
+      </div>
+      ${mems.filter(m=>!m.manager_id).length?`<div style="margin-top:10px;padding:10px 13px;background:var(--sc);border-radius:var(--r);font-size:13px;color:var(--om)">Unassigned (${mems.filter(m=>!m.manager_id).length}): ${mems.filter(m=>!m.manager_id).map(m=>`<span class="chip" style="margin:0 3px">${m.name}</span>`).join('')}</div>`:''}`).join('')}
+  </div>`;
+}
+
+// ── ACTIVITY PAGE (replaces attendance) ──
+function pgAtt(c){
+  const show=ME.role==='manager'?allUsers.filter(u=>u.manager_id===ME.id):allUsers;
+  const online=show.filter(u=>allAtt.some(a=>a.user_id===u.id&&!a.logout_time)).length;
+  const myAtt=allAtt.find(a=>a.user_id===ME.id);
+  const myMs=myAtt?.login_time_ms||(myAtt?.login_time?.toDate?.()?.getTime())||null;
+  const myDur=myMs?Date.now()-myMs:0;
+  c.innerHTML=`
+  <!-- My session card -->
+  <div class="act-session-card">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--om);margin-bottom:8px">My Session</div>
+        <div class="act-timer-big" id="actTimerBig">${fmtMs(myDur)}</div>
+        <div class="act-timer-lbl">Active since ${myAtt?fmtTime(myAtt.login_time):'—'} · ${new Date().toLocaleDateString('en-IN',{month:'short',day:'numeric'})}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+        <span class="bdg b-on" style="font-size:13px;padding:6px 14px">● Active</span>
+        <button class="btn bdn sm" onclick="openLogoutModal()" style="gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- Team overview stats -->
+  <div class="sg" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+    ${sc('wifi','grn','Online',online,'')}
+    ${sc('calendar-check','blue','Logged Today',allAtt.filter(a=>show.some(u=>u.id===a.user_id)).length,'')}
+    ${sc('users','amb','Total',show.length,'')}
+  </div>
+  <!-- Team attendance -->
+  <div class="sh"><div class="st">Today's Log</div><div style="font-size:13px;color:var(--om)">${new Date().toLocaleDateString('en-IN',{weekday:'long',month:'long',day:'numeric'})}</div></div>
+  <div class="tc-list">
+    ${show.map(u=>{
+      const a=allAtt.find(x=>x.user_id===u.id),on=a&&!a.logout_time;
+      const dur=on&&a?.login_time_ms?Date.now()-a.login_time_ms:a?.duration||null;
+      const ws=allWorkspaces.find(w=>w.id===u.workspace_id);
+      return`<div class="card" style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="position:relative;flex-shrink:0">
+            ${avH(u.name,'av-md')}
+            <span style="position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;background:${on?'var(--grn)':'var(--out)'};border:2px solid var(--surf)"></span>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:15px">${u.name}</div>
+            <div style="font-size:12.5px;color:var(--om)">${rl(u.role)}${ws?' · '+ws.icon+' '+ws.name:''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div class="bdg ${on?'b-on':'b-done'}" style="font-size:12px;margin-bottom:4px">${on?'● Online':'Offline'}</div>
+            ${dur?`<div style="font-size:12px;font-family:var(--mono);color:var(--grn)">${fmtMs(dur)}</div>`:''}
+          </div>
+        </div>
+        ${a?`<div style="display:flex;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--ov)">
+          <div><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:2px">Login</div><div style="font-size:13px;font-family:var(--mono)">${fmtTime(a.login_time)}</div></div>
+          ${a.logout_time?`<div><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:2px">Logout</div><div style="font-size:13px;font-family:var(--mono)">${fmtTime(a.logout_time)}</div></div>`:''}
+        </div>`:''}
+      </div>`;
+    }).join('')}
+  </div>`;
+  // Live update the session timer on the activity page
+  if(_actTimer)clearInterval(_actTimer);
+  _actTimer=setInterval(()=>{
+    const el=$('actTimerBig');
+    if(!el||pg!=='activity'){clearInterval(_actTimer);_actTimer=null;return;}
+    const ms=myMs?Date.now()-myMs:0;
+    el.textContent=fmtMs(ms);
+  },1000);
+}
+let _actTimer=null;
+
+// ── REPORTS ──
+function pgReports(c){
+  const td=allTasks.filter(t=>t.status==='done').length;
+  const ta=allTasks.filter(t=>t.status==='active').length;
+  const tp=allTasks.filter(t=>!t.status||t.status==='pending').length;
+  c.innerHTML=`
+  <!-- Download section -->
+  <div style="background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);padding:20px;margin-bottom:20px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px">Download Reports</div>
+    <div style="font-size:13.5px;color:var(--om);margin-bottom:16px">Export all data including tasks, users, and session times</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+      <button class="btn export-btn-xl bw" onclick="dlExcel()" style="height:62px;border-radius:16px;flex-direction:column;gap:6px;font-size:14px;font-weight:700;padding:10px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Excel
+      </button>
+      <button class="btn export-btn-pdf bw" onclick="dlPDF()" style="height:62px;border-radius:16px;flex-direction:column;gap:6px;font-size:14px;font-weight:700;padding:10px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        PDF
+      </button>
+    </div>
+  </div>
+  <!-- Stats -->
+  <div class="sg" style="margin-bottom:20px">
+    ${sc('list','blue','Total Tasks',allTasks.length,'')}
+    ${sc('zap','amb','Active',ta,'')}
+    ${sc('check-circle','grn','Done',td,'')}
+    ${sc('list-checks','pur','Checklists',allChecklists.length,'')}
+  </div>
+  <!-- Task status breakdown -->
+  <div class="sh"><div class="st">Task Status</div></div>
+  <div class="card card-bd" style="margin-bottom:16px">${progress(td,ta,tp)}</div>
+  <!-- Priority breakdown -->
+  <div class="sh"><div class="st">By Priority</div></div>
+  <div class="card card-bd" style="margin-bottom:16px">
+    ${['urgent','high','normal'].map(p=>{
+      const cnt=allTasks.filter(t=>(t.priority||'normal')===p).length;
+      const pct=allTasks.length?Math.round(cnt/allTasks.length*100):0;
+      const cols={urgent:'var(--red)',high:'var(--amb)',normal:'var(--grn)'};
+      return`<div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:14px;font-weight:600;text-transform:capitalize">${p}</span>
+          <span style="font-size:13.5px;color:var(--om)">${cnt} tasks (${pct}%)</span>
+        </div>
+        <div class="pb"><div class="pf" style="width:${pct}%;background:${cols[p]}"></div></div>
+      </div>`;
+    }).join('')}
+  </div>
+  <!-- Member performance -->
+  <div class="sh"><div class="st">Member Performance</div></div>
+  <div class="tc-list">
+    ${allUsers.filter(u=>u.role==='member').map(u=>{
+      const tasks=allTasks.filter(t=>(t.assignees||[]).includes(u.id));
+      const done=tasks.filter(t=>t.status==='done').length;
+      const rate=tasks.length?Math.round(done/tasks.length*100):0;
+      const clAssigned=allChecklists.filter(cl=>(cl.assignees||[]).includes(u.id)).length;
+      const clDone=allCheckins.filter(ci=>ci.user_id===u.id&&ci.status==='done'&&ci.date===todayIST()).length;
+      const att=allAtt.find(a=>a.user_id===u.id);
+      const on=att&&!att.logout_time;
+      return`<div class="card" style="padding:15px 16px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="position:relative;flex-shrink:0">${avH(u.name,'av-md')}<span style="position:absolute;bottom:0;right:0;width:9px;height:9px;border-radius:50%;background:${on?'var(--grn)':'var(--out)'};border:2px solid var(--surf)"></span></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:15px">${u.name}</div>
+            <div style="font-size:12.5px;color:var(--om)">${u.email||'—'}</div>
+          </div>
+          <span class="bdg ${on?'b-on':'b-done'}">${on?'● Online':'Offline'}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="background:var(--sc);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:700;color:var(--pri)">${tasks.length}</div>
+            <div style="font-size:11px;color:var(--om);margin-top:2px">Tasks</div>
+          </div>
+          <div style="background:var(--gc);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:700;color:var(--grn)">${done}</div>
+            <div style="font-size:11px;color:var(--om);margin-top:2px">Done</div>
+          </div>
+          <div style="background:var(--pc);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:700;color:var(--pri)">${clDone}/${clAssigned}</div>
+            <div style="font-size:11px;color:var(--om);margin-top:2px">Checklist</div>
+          </div>
+        </div>
+        ${tasks.length?`<div style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12.5px"><span style="color:var(--om)">Task completion rate</span><span style="font-weight:700;color:${rate>=70?'var(--grn)':rate>=40?'var(--amb)':'var(--red)'}">${rate}%</span></div>
+          <div class="pb"><div class="pf" style="width:${rate}%;background:${rate>=70?'var(--grn)':rate>=40?'var(--amb)':'var(--red)'}"></div></div>
+        </div>`:''}
+      </div>`;
+    }).join('')||`<div class="card card-bd">${emH('users','No members yet','')}</div>`}
+  </div>`;
+}
+
+// ── TEAM PAGE ──
+function pgTeam(c){
+  const mems=allUsers.filter(u=>u.manager_id===ME.id);
+  c.innerHTML=`<div class="sh"><div class="st">My Team <b>(${mems.length})</b></div><button class="btn bf sm" onclick="openTask()" style="gap:5px">${ic('plus',13,'#fff')} Assign Task</button></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+    ${mems.length?mems.map(m=>{
+      const mt=allTasks.filter(t=>(t.assignees||[]).includes(m.id)),dc=mt.filter(t=>t.status==='done').length;
+      const a=allAtt.find(x=>x.user_id===m.id),on=a&&!a.logout_time;
+      const clDone=allCheckins.filter(ci=>ci.user_id===m.id&&ci.status==='done'&&ci.date===todayIST()).length;
+      const clTotal=allChecklists.filter(cl=>(cl.assignees||[]).includes(m.id)).length;
+      return`<div class="card card-bd"><div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">${avH(m.name,'av-lg')}<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">${m.name}</div><div style="font-size:11.5px;color:var(--om);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.email||''}</div></div><div class="${on?'don':'doff'}"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px">
+        <div style="background:var(--sc);padding:8px;border-radius:var(--r);text-align:center"><div style="font-size:18px;font-weight:700">${mt.length}</div><div style="font-size:10.5px;color:var(--om)">Tasks</div></div>
+        <div style="background:var(--gc);padding:8px;border-radius:var(--r);text-align:center"><div style="font-size:18px;font-weight:700;color:var(--grn)">${dc}</div><div style="font-size:10.5px;color:var(--om)">Done</div></div>
+      </div>
+      <div style="font-size:12.5px;color:var(--om)">Checklist: <span style="font-weight:700;color:${clDone===clTotal&&clTotal>0?'var(--grn)':'var(--pri)'}">${clDone}/${clTotal} done</span></div>
+      </div>`;
+    }).join(''):`<div class="card">${emH('users','No members assigned','')}</div>`}
+  </div>`;
+}
+
+// ── ACCOUNT PAGE ──
+function pgAccount(c){
+  const myTasks=allTasks.length;
+  const myDone=allTasks.filter(t=>t.status==='done').length;
+  const myCLs=allChecklists.filter(cl=>(cl.assignees||[]).includes(ME.id)).length;
+  c.innerHTML=`
+  <div style="max-width:560px">
+    <!-- Profile hero -->
+    <div style="background:linear-gradient(135deg,var(--pri) 0%,#3B82F6 100%);border-radius:20px;padding:24px;color:#fff;margin-bottom:16px;text-align:center;position:relative;overflow:hidden">
+      <div style="position:absolute;top:-30px;right:-30px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.08)"></div>
+      <div class="av av-lg" style="background:rgba(255,255,255,.2);border:3px solid rgba(255,255,255,.35);font-size:20px;margin:0 auto 12px;width:64px;height:64px">${ini(ME.name)}</div>
+      <div style="font-size:20px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px">${ME.name}</div>
+      <div style="font-size:14px;opacity:.8;margin-bottom:10px">${ME.email}</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+        <span style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:5px 14px;font-size:13px;font-weight:600">${rl(ME.role)}</span>
+        ${CWS?`<span style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:5px 14px;font-size:13px">${CWS.icon||'🏢'} ${CWS.name}</span>`:''}
+      </div>
+    </div>
+    <!-- Activity stats -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+      <div style="background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);padding:14px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:var(--pri)">${myTasks}</div>
+        <div style="font-size:11.5px;color:var(--om);margin-top:3px">Tasks</div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);padding:14px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:var(--grn)">${myDone}</div>
+        <div style="font-size:11.5px;color:var(--om);margin-top:3px">Completed</div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--ov);border-radius:var(--rl);padding:14px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:var(--pur)">${myCLs}</div>
+        <div style="font-size:11.5px;color:var(--om);margin-top:3px">Checklists</div>
+      </div>
+    </div>
+    <!-- Edit profile -->
+    <div class="card card-bd" style="margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px">Edit Profile</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="fg" style="margin:0"><label class="fl">Display Name</label><input type="text" class="fi" id="acc_name" value="${ME.name||''}"></div>
+        <div class="fg" style="margin:0"><label class="fl">Phone</label><input type="tel" class="fi" id="acc_phone" value="${ME.phone||''}" placeholder="+91 00000 00000"></div>
+        <div class="fg" style="margin:0"><label class="fl">Department</label><input type="text" class="fi" id="acc_dept" value="${ME.department||''}" placeholder="e.g. Marketing"></div>
+        <div class="fg" style="margin:0"><label class="fl">Role</label><input type="text" class="fi" value="${rl(ME.role)}" readonly style="opacity:.5;cursor:not-allowed;background:var(--sc)"></div>
+      </div>
+      <div class="fg"><label class="fl">Bio</label><textarea class="fi" id="acc_bio" placeholder="A short bio…" style="min-height:72px">${ME.bio||''}</textarea></div>
+      <button class="btn bf bw" onclick="saveAccount()" style="gap:7px;border-radius:14px;height:50px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save Changes
+      </button>
+    </div>
+    <!-- Sign out -->
+    <div class="card card-bd">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:2px">Session</div>
+          <div style="font-size:13px;color:var(--om)" id="accSessionInfo">Active today</div>
+        </div>
+        <button class="btn bdn" onclick="openLogoutModal()" style="gap:7px;border-radius:14px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sign Out
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+window.saveAccount=async function(){
+  const name=$('acc_name')?.value.trim(),phone=$('acc_phone')?.value.trim(),dept=$('acc_dept')?.value.trim(),bio=$('acc_bio')?.value.trim();
+  if(!name){toast('Name required','err');return;}
+  try{
+    await updateDoc(doc(db,'users',ME.id),{name,phone:phone||'',department:dept||'',bio:bio||''});
+    ME.name=name;ME.phone=phone;ME.department=dept;ME.bio=bio;
+    $('sbav').textContent=ini(name);$('sbname').textContent=name;
+    toast('Account updated!','ok');render('account');
+  }catch(e){toast('Failed: '+e.message,'err');}
+};
+
+// ── SEED ──
+function pgSeed(c){
+  c.innerHTML=`<div class="sh"><div class="st">Demo Data</div></div>
+  <div class="card" style="max-width:500px">
+    <div class="card-hd">${ic('database',16,'var(--grn)')}<div class="card-t">Seed Demo Users & Tasks</div></div>
+    <div class="card-bd">
+      <p style="font-size:13.5px;color:var(--ov2);margin-bottom:11px;line-height:1.6">Creates 2 managers + 5 members + sample tasks with multi-user assignment.</p>
+      <div class="warn-box">${ic('alert-triangle',14,'var(--amb)')}<span>Firestore rules: <code style="background:rgba(0,0,0,.08);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px">allow read, write: if request.auth != null;</code></span></div>
+      <div id="slogI" style="font-size:12px;font-family:var(--mono);background:var(--sc);border-radius:var(--r);padding:10px;max-height:180px;overflow-y:auto;display:none;margin-bottom:11px;line-height:1.9;border:1px solid var(--ov)"></div>
+      <button class="btn bf" id="seedPI" onclick="doSeed('slogI','seedPI')" style="gap:7px">${ic('database',14,'#fff')} Seed Demo Data</button>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════
+// TASK ACTIONS
+// ══════════════════════════════════════
+
+// Multi-select checkbox helper
+window.toggleMSel=function(el,val){
+  const cb=el.querySelector('input[type=checkbox]');
+  if(cb){cb.checked=!cb.checked;el.classList.toggle('checked',cb.checked);}
+};
+
+function buildAssigneeList(containerId,selectedIds=[]){
+  const container=$(containerId);if(!container)return;
+  // All users — universal assignment
+  const grp={admin:[],manager:[],member:[]};
+  allUsers.forEach(u=>{if(grp[u.role])grp[u.role].push(u);});
+  container.innerHTML=['admin','manager','member'].map(role=>
+    grp[role].length?`<div style="padding:5px 8px 2px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om)">${rl(role)}s</div>`+
+    grp[role].map(u=>`<div class="multi-sel-item${selectedIds.includes(u.id)?' checked':''}" onclick="toggleMSel(this,'${u.id}')">
+      <input type="checkbox" value="${u.id}"${selectedIds.includes(u.id)?' checked':''}>
+      ${avH(u.name,'av-xs')}<span>${u.name}</span>
+    </div>`).join(''):''
+  ).join('');
+}
+
+window.openTask=function(){
+  $('mt_id').value='';$('mt_title').value='';$('mt_desc').value='';
+  $('mt_pri').value='normal';$('mt_due').value='';$('mt_status').value='pending';
+  buildAssigneeList('mt_to_list',[]);
+  $('mTaskTitle').textContent='New Task';
+  $('mt_sub').textContent='Create Task';
+  $('mt_sub').onclick=doCreateTask;
+  openM('mTask');
+};
+
+function getSelectedAssignees(listId){
+  return [...document.querySelectorAll(`#${listId} input:checked`)].map(el=>el.value);
+}
+
+async function doCreateTask(){
+  const title=$('mt_title').value.trim();
+  const assignees=getSelectedAssignees('mt_to_list');
+  if(!title){toast('Title required','err');return;}
+  if(!assignees.length){toast('Select at least one person','err');return;}
+  const btn=$('mt_sub');btn.disabled=true;btn.textContent='Creating…';
+  try{
+    const firstAssignee=uById(assignees[0]);
+    const mgr_id=ME.role==='manager'?ME.id:(firstAssignee?.manager_id||null);
+    const taskRef=await addDoc(collection(db,'tasks'),{
+      title,description:$('mt_desc').value.trim(),
+      assignees,assigned_to:assignees[0], // keep for backward compat
+      assigned_by:ME.id,manager_id:mgr_id,
+      status:$('mt_status').value||'pending',
+      priority:$('mt_pri').value||'normal',
+      due_date:$('mt_due').value||null,
+      workspace_id:CWS?CWS.id:'',
+      created_at:serverTimestamp()
+    });
+    // Notify all assignees
+    for(const uid of assignees) await sendNotif(uid,`New task assigned to you: "${title}"`,taskRef.id);
+    closeM('mTask');toast('Task created!','ok');
+  }catch(e){toast('Failed: '+e.message,'err');}
+  btn.disabled=false;btn.textContent='Create Task';
+}
+
+window.editTask=function(tid){
+  const t=allTasks.find(x=>x.id===tid);if(!t)return;
+  $('mt_id').value=tid;$('mt_title').value=t.title||'';$('mt_desc').value=t.description||'';
+  $('mt_pri').value=t.priority||'normal';$('mt_due').value=t.due_date||'';$('mt_status').value=t.status||'pending';
+  buildAssigneeList('mt_to_list',t.assignees||[t.assigned_to].filter(Boolean));
+  $('mTaskTitle').textContent='Edit Task';$('mt_sub').textContent='Save';
+  $('mt_sub').onclick=async function(){
+    const title=$('mt_title').value.trim();
+    const assignees=getSelectedAssignees('mt_to_list');
+    if(!title){toast('Title required','err');return;}
+    const btn=$('mt_sub');btn.disabled=true;btn.textContent='Saving…';
+    try{
+      const firstAssignee=uById(assignees[0]||t.assignees?.[0]);
+      await updateDoc(doc(db,'tasks',tid),{
+        title,description:$('mt_desc').value.trim(),
+        assignees:assignees.length?assignees:(t.assignees||[]),
+        assigned_to:assignees[0]||t.assigned_to,
+        manager_id:ME.role==='manager'?ME.id:(firstAssignee?.manager_id||t.manager_id),
+        priority:$('mt_pri').value,due_date:$('mt_due').value||null,
+        status:$('mt_status').value,updated_at:serverTimestamp()
+      });
+      closeM('mTask');toast('Updated!','ok');
+    }catch(e){toast('Failed: '+e.message,'err');}
+    btn.disabled=false;btn.textContent='Save';
+  };
+  openM('mTask');
+};
+
+// VIEW TASK
+function renderCmtList(cmts,tid){
+  const el=$('cmtList');if(!el)return;
+  const sorted=[...cmts].sort((a,b)=>(a.created_at?.toDate?.()?.getTime()||0)-(b.created_at?.toDate?.()?.getTime()||0));
+  const lbl=$('cmtCount');if(lbl)lbl.textContent=sorted.length;
+  el.innerHTML=sorted.length?sorted.map(cm=>`
+    <div style="display:flex;gap:8px;margin-bottom:11px">${avH(uName(cm.user_id),'av-sm')}
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+          <span style="font-size:12.5px;font-weight:600">${uName(cm.user_id)}</span>
+          <span style="font-size:11px;color:var(--om)">${fmtDT(cm.created_at)}</span>
+        </div>
+        <div style="font-size:13px;background:var(--sc);padding:8px 11px;border-radius:var(--r);line-height:1.5">${cm.text}</div>
+      </div>
+    </div>`).join(''):'<div style="text-align:center;padding:20px;color:var(--om);font-size:13px">No comments — be the first!</div>';
+  ri();
+}
+
+window.viewTask=async function(tid){
+  $('mdTitle').textContent='Loading…';
+  $('mdBody').innerHTML=`<div style="text-align:center;padding:44px;color:var(--om)"><svg class="ring" viewBox="0 0 36 36" style="margin:0 auto"><circle cx="18" cy="18" r="14" fill="none" stroke="#E8F0FE" stroke-width="3"/><circle class="arc" cx="18" cy="18" r="14" fill="none" stroke="#1A73E8" stroke-width="3" stroke-linecap="round" stroke-dasharray="55 100"/></svg><div style="margin-top:12px">Loading…</div></div>`;
+  openM('mDetail');
+  if(_detailUnsub){_detailUnsub();_detailUnsub=null;}
+  let t=allTasks.find(x=>x.id===tid);
+  if(!t){try{const sn=await getDoc(doc(db,'tasks',tid));if(sn.exists())t={id:sn.id,...sn.data()};}catch{}}
+  if(!t){$('mdBody').innerHTML=`<div style="text-align:center;padding:40px;color:var(--red)">Task not found.</div>`;return;}
+  const assignees=(t.assignees||[t.assigned_to]).filter(Boolean);
+  $('mdTitle').textContent=t.title;
+  $('mdBody').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="background:var(--sc);border-radius:var(--r);padding:11px 13px"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:5px">Status</div>${sBdg(t.status||'pending')}</div>
+      <div style="background:var(--sc);border-radius:var(--r);padding:11px 13px"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:5px">Priority</div>${pBdg(t.priority)}</div>
+      <div style="background:var(--sc);border-radius:var(--r);padding:11px 13px;grid-column:1/-1"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:7px">Assignees</div><div style="display:flex;gap:6px;flex-wrap:wrap">${assignees.map(uid=>`<div style="display:flex;align-items:center;gap:5px;background:var(--surf);border:1px solid var(--ov);border-radius:20px;padding:3px 9px;font-size:12.5px">${avH(uName(uid),'av-xs')}${uName(uid)}</div>`).join('')}</div></div>
+      <div style="background:var(--sc);border-radius:var(--r);padding:11px 13px"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:5px">Created By</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px">${avH(uName(t.assigned_by),'av-xs')}<span style="font-size:13px;font-weight:600">${uName(t.assigned_by)}</span></div></div>
+      <div style="background:var(--sc);border-radius:var(--r);padding:11px 13px"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:5px">Due Date</div><div style="font-size:13.5px">${t.due_date||'No due date'}</div></div>
+    </div>
+    ${t.description?`<div style="margin-bottom:16px"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--om);margin-bottom:7px">Description</div><div style="font-size:13.5px;line-height:1.7;background:var(--sc);padding:12px 14px;border-radius:var(--r)">${t.description}</div></div>`:''}
+    <div style="height:1px;background:var(--ov);margin:0 0 14px"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">${ic('message-circle',14,'var(--om)')} Comments (<span id="cmtCount">0</span>)</div>
+      <button class="btn bt sm" onclick="openNote('${tid}')" style="gap:5px">${ic('plus',12)} Add</button>
+    </div>
+    <div id="cmtList" style="max-height:240px;overflow-y:auto;padding-right:3px"></div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--ov);display:flex;gap:7px;flex-wrap:wrap">
+      ${t.status!=='done'?`<button class="btn bf sm" onclick="markDone('${tid}');closeM('mDetail')" style="background:var(--grn);gap:5px">${ic('check',12,'#fff')} Mark Done</button>`:''}
+      ${ME.role!=='member'?`<button class="btn bo sm" onclick="closeM('mDetail');editTask('${tid}')" style="gap:5px">${ic('pencil',12)} Edit</button>`:''}
+      ${ME.role!=='member'?`<button class="btn bdn sm" onclick="delTask('${tid}');closeM('mDetail')" style="gap:5px">${ic('trash-2',12)} Delete</button>`:''}
+    </div>`;
+  ri();renderCmtList([],tid);
+  _detailUnsub=onSnapshot(query(collection(db,'comments'),where('task_id','==',tid)),sn=>{
+    const cmts=sn.docs.map(d=>({id:d.id,...d.data()}));
+    allComments=[...allComments.filter(c=>c.task_id!==tid),...cmts];
+    renderCmtList(cmts,tid);
+  },e=>console.warn('cmt',e));
+};
+$('mDetailX').addEventListener('click',()=>{if(_detailUnsub){_detailUnsub();_detailUnsub=null;}});
+
+window.markDone=async function(tid){try{await updateDoc(doc(db,'tasks',tid),{status:'done'});toast('Done!','ok');}catch{toast('Failed','err');}};
+window.delTask=async function(tid){if(!confirm('Delete this task?'))return;try{await deleteDoc(doc(db,'tasks',tid));toast('Deleted','ok');}catch{toast('Failed','err');}};
+
+// ── COMMENTS ──
+window.openNote=function(tid){$('mn_tid').value=tid;$('mn_text').value='';openM('mNote');};
+$('mn_sub').addEventListener('click',async()=>{
+  const tid=$('mn_tid').value,text=$('mn_text').value.trim();
+  if(!text){toast('Write something','err');return;}
+  const btn=$('mn_sub');btn.disabled=true;btn.textContent='Posting…';
+  try{
+    await addDoc(collection(db,'comments'),{task_id:tid,user_id:ME.id,text,created_at:serverTimestamp()});
+    // Notify task assignees
+    const t=allTasks.find(x=>x.id===tid);
+    if(t){for(const uid of(t.assignees||[t.assigned_to]).filter(Boolean))await sendNotif(uid,`${ME.name} commented on "${t.title}"`,tid);}
+    closeM('mNote');toast('Posted!','ok');
+  }catch(e){toast('Failed','err');}
+  btn.disabled=false;btn.textContent='Post';
+});
+
+// ── USER MANAGEMENT ──
+window.changeRole=async function(uid,newRole,el){
+  const u=uById(uid);if(!u)return;
+  if(!confirm(`Change ${u.name} to ${rl(newRole)}?`)){if(el)el.value=u.role;return;}
+  try{await updateDoc(doc(db,'users',uid),{role:newRole,manager_id:newRole!=='member'?null:(u.manager_id||null)});toast(`${u.name} is now ${rl(newRole)}`,'ok');}
+  catch{toast('Failed','err');if(el)el.value=u.role;}
+};
+window.changeMgr=async function(uid,mgrId){
+  try{await updateDoc(doc(db,'users',uid),{manager_id:mgrId||null});toast('Manager updated!','ok');}catch{toast('Failed','err');}
+};
+window.openEditUser=function(uid){
+  const u=uById(uid);if(!u)return;
+  const isSelf=uid===ME.id;
+  $('mu_id').value=uid;$('mu_name').value=u.name;$('mu_role').value=u.role;
+  $('mu_rg').style.display=isSelf?'none':'block';
+  const msel=$('mu_mgr');msel.innerHTML='<option value="">No Manager</option>';
+  allUsers.filter(m=>m.role==='manager').forEach(m=>msel.innerHTML+=`<option value="${m.id}" ${m.id===u.manager_id?'selected':''}>${m.name}</option>`);
+  $('mu_mg').style.display=u.role==='member'?'block':'none';
+  // Workspace override (Admin only)
+  const wsel=$('mu_ws');wsel.innerHTML='<option value="">— Keep current —</option>';
+  allWorkspaces.forEach(w=>wsel.innerHTML+=`<option value="${w.id}" ${w.id===u.workspace_id?'selected':''}>${w.icon||'🏢'} ${w.name}</option>`);
+  $('mu_ws_grp').style.display='block';
+  $('muTitle').textContent='Edit '+u.name;
+  $('mu_sub').onclick=async function(){
+    const name=$('mu_name').value.trim(),role=$('mu_role').value,mgr=$('mu_mgr').value,wsId=$('mu_ws').value;
+    if(!name){toast('Name required','err');return;}
+    const upd={name,role,manager_id:role==='member'&&mgr?mgr:null};
+    if(wsId)upd.workspace_id=wsId;
+    try{
+      await updateDoc(doc(db,'users',$('mu_id').value),upd);
+      if($('mu_id').value===ME.id){ME.name=name;$('sbav').textContent=ini(name);$('sbname').textContent=name;}
+      closeM('mUser');toast('Updated!','ok');
+    }catch(e){toast('Failed','err');}
+  };
+  openM('mUser');
+};
+window.muRoleChange=function(){$('mu_mg').style.display=$('mu_role').value==='member'?'block':'none';};
+window.delUser=async function(uid,name){
+  if(!confirm(`Remove ${name}?`))return;
+  try{await deleteDoc(doc(db,'users',uid));toast('Removed','ok');}catch{toast('Failed','err');}
+};
+
+// ── EXPORT ── // UPDATED: Excel (SheetJS) + PDF (jsPDF) replace JSON export
+
+// NEW: Excel Export using SheetJS
+window.dlExcel=function(){
+  if(typeof XLSX==='undefined'){toast('SheetJS not loaded yet, please wait…','warn');return;}
+  const wb=XLSX.utils.book_new();
+
+  // Sheet 1: Tasks
+  const taskData=[['Title','Status','Priority','Assignees','Created By','Due Date','Manager']];
+  allTasks.forEach(t=>{
+    const assignees=(t.assignees||[t.assigned_to]).filter(Boolean).map(uName).join(', ');
+    taskData.push([t.title||'',t.status||'pending',t.priority||'normal',assignees,uName(t.assigned_by),t.due_date||'—',uName(t.manager_id)||'—']);
+  });
+  const wsT=XLSX.utils.aoa_to_sheet(taskData);
+  wsT['!cols']=[{wch:32},{wch:12},{wch:10},{wch:28},{wch:18},{wch:12},{wch:18}];
+  XLSX.utils.book_append_sheet(wb,wsT,'Tasks');
+
+  // Sheet 2: Checklist Summary
+  const clData=[['Member','Task','Status','Note','Done Date']];
+  allUsers.filter(u=>u.role==='member').forEach(u=>{
+    const assigned=allChecklists.filter(cl=>(cl.assignees||[]).includes(u.id));
+    assigned.forEach(cl=>{
+      const ci=allCheckins.find(ci=>ci.checklist_id===cl.id&&ci.user_id===u.id&&ci.date===todayIST());
+      clData.push([u.name,cl.title,ci?.status||'pending',ci?.note||'',ci?.status==='done'?todayIST():'']);
+    });
+  });
+  const wsC=XLSX.utils.aoa_to_sheet(clData);
+  wsC['!cols']=[{wch:20},{wch:32},{wch:12},{wch:28},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,wsC,'Checklist');
+
+  // Sheet 3: User Performance
+  const perfData=[['Member','Tasks Total','Tasks Done','CL Assigned','CL Done','Completion %']];
+  allUsers.filter(u=>u.role==='member').forEach(u=>{
+    const tasks=allTasks.filter(t=>(t.assignees||[]).includes(u.id));
+    const tasksDone=tasks.filter(t=>t.status==='done').length;
+    const clAssigned=allChecklists.filter(cl=>(cl.assignees||[]).includes(u.id)).length;
+    const clDone=allCheckins.filter(ci=>ci.user_id===u.id&&ci.status==='done'&&ci.date===todayIST()).length;
+    const pct=clAssigned?Math.round(clDone/clAssigned*100):0;
+    perfData.push([u.name,tasks.length,tasksDone,clAssigned,clDone,pct+'%']);
+  });
+  const wsP=XLSX.utils.aoa_to_sheet(perfData);
+  wsP['!cols']=[{wch:20},{wch:12},{wch:12},{wch:14},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,wsP,'Performance');
+
+  XLSX.writeFile(wb,`arka-report-${today()}.xlsx`);
+  toast('Excel downloaded!','ok');
+};
+
+// NEW: PDF Export using jsPDF + autoTable
+window.dlPDF=function(){
+  if(typeof window.jspdf==='undefined'){toast('jsPDF not loaded yet, please wait…','warn');return;}
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const pageW=doc.internal.pageSize.getWidth();
+  const prim=[26,115,232],grn=[19,115,51],amb=[176,96,0];
+  const dateStr=new Date().toLocaleDateString('en-IN',{year:'numeric',month:'long',day:'numeric'});
+
+  // ── HEADER ──
+  doc.setFillColor(...prim);doc.rect(0,0,pageW,18,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont('helvetica','bold');
+  doc.text('ARKA Workspace Report',14,12);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text(`Generated: ${dateStr} · Workspace: ${CWS?CWS.name:'All'} · By: ${ME.name}`,14,17.5);
+  doc.setTextColor(0,0,0);
+
+  let y=26;
+
+  // ── SECTION 1: Task Summary ──
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...prim);
+  doc.text('Task Overview',14,y);y+=7;
+  const td=allTasks.filter(t=>t.status==='done').length;
+  const ta=allTasks.filter(t=>t.status==='active').length;
+  const tp=allTasks.filter(t=>!t.status||t.status==='pending').length;
+  doc.autoTable({
+    startY:y,margin:{left:14,right:14},
+    head:[['Total','Active','Done','Pending']],
+    body:[[allTasks.length,ta,td,tp]],
+    headStyles:{fillColor:prim,textColor:255,fontStyle:'bold',fontSize:9},
+    bodyStyles:{fontSize:9},
+    columnStyles:{0:{halign:'center'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'}},
+    theme:'striped'
+  });
+  y=doc.lastAutoTable.finalY+8;
+
+  // ── SECTION 2: Task List ──
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...prim);
+  doc.text('Task List',14,y);y+=4;
+  doc.autoTable({
+    startY:y,margin:{left:14,right:14},
+    head:[['Task','Status','Priority','Assignees','Created By']],
+    body:allTasks.slice(0,60).map(t=>{
+      const assignees=(t.assignees||[t.assigned_to]).filter(Boolean).map(uName).join(', ');
+      return[t.title?.slice(0,40)||'',t.status||'pending',t.priority||'normal',assignees?.slice(0,28)||'',uName(t.assigned_by)?.slice(0,18)||''];
+    }),
+    headStyles:{fillColor:prim,textColor:255,fontStyle:'bold',fontSize:8},
+    bodyStyles:{fontSize:8},
+    alternateRowStyles:{fillColor:[248,249,255]},
+    theme:'striped',
+    didDrawCell:(data)=>{
+      if(data.section==='body'&&data.column.index===1){
+        const v=data.cell.text[0];
+        if(v==='done'){data.cell.styles.textColor=grn;data.cell.styles.fontStyle='bold';}
+        else if(v==='active'){data.cell.styles.textColor=prim;data.cell.styles.fontStyle='bold';}
+      }
+    }
+  });
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── SECTION 3: Checklist Completion Summary ──
+  if(y>250){doc.addPage();y=20;}
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...prim);
+  doc.text('Checklist Completion — Today',14,y);y+=4;
+  const clRows=allUsers.filter(u=>u.role==='member').map(u=>{
+    const clAssigned=allChecklists.filter(cl=>(cl.assignees||[]).includes(u.id)).length;
+    const clDone=allCheckins.filter(ci=>ci.user_id===u.id&&ci.status==='done'&&ci.date===todayIST()).length;
+    const pct=clAssigned?Math.round(clDone/clAssigned*100):0;
+    return[u.name,clAssigned,clDone,pct+'%',pct===100?'✓ Complete':'Pending'];
+  });
+  doc.autoTable({
+    startY:y,margin:{left:14,right:14},
+    head:[['Member','Assigned','Done','%','Status']],
+    body:clRows.length?clRows:[['No members','—','—','—','—']],
+    headStyles:{fillColor:grn,textColor:255,fontStyle:'bold',fontSize:9},
+    bodyStyles:{fontSize:9},
+    theme:'striped',
+    didDrawCell:(data)=>{
+      if(data.section==='body'&&data.column.index===4){
+        const v=data.cell.text[0];
+        if(v==='✓ Complete')data.cell.styles.textColor=grn;
+        else data.cell.styles.textColor=amb;
+      }
+    }
+  });
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── SECTION 4: User Performance ──
+  if(y>240){doc.addPage();y=20;}
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...prim);
+  doc.text('User Performance Summary',14,y);y+=4;
+  const perfRows=allUsers.filter(u=>u.role==='member').map(u=>{
+    const tasks=allTasks.filter(t=>(t.assignees||[]).includes(u.id));
+    const done=tasks.filter(t=>t.status==='done').length;
+    const rate=tasks.length?Math.round(done/tasks.length*100):0;
+    const att=allAtt.find(a=>a.user_id===u.id);
+    const dur=att?.duration?fmtMs(att.duration):(att&&!att.logout_time&&att.login_time_ms?fmtMs(Date.now()-att.login_time_ms):'—');
+    return[u.name,tasks.length,done,rate+'%',dur,att&&!att.logout_time?'Online':'Offline'];
+  });
+  doc.autoTable({
+    startY:y,margin:{left:14,right:14},
+    head:[['Member','Tasks','Done','Rate','Session','Status']],
+    body:perfRows.length?perfRows:[['No members','—','—','—','—','—']],
+    headStyles:{fillColor:[123,31,162],textColor:255,fontStyle:'bold',fontSize:9},
+    bodyStyles:{fontSize:9},
+    theme:'striped'
+  });
+
+  // ── FOOTER on each page ──
+  const pgCount=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pgCount;i++){
+    doc.setPage(i);doc.setFontSize(8);doc.setTextColor(160,160,160);
+    doc.text(`ARKA Workspace · ${dateStr} · Page ${i} of ${pgCount}`,pageW/2,doc.internal.pageSize.getHeight()-8,{align:'center'});
+  }
+
+  doc.save(`arka-report-${today()}.pdf`);
+  toast('PDF downloaded!','ok');
+};
+
+// KEPT for backward compat (JSON export) but hidden from UI
+window.dlReport=function(){
+  const r={generated:new Date().toISOString(),user:{name:ME.name,role:ME.role},workspace:CWS?CWS.name:'—',
+    tasks:allTasks.map(t=>({title:t.title,status:t.status,priority:t.priority,assignees:(t.assignees||[]).map(uName),by:uName(t.assigned_by)})),
+    checklists:allChecklists.map(cl=>({title:cl.title,assignees:(cl.assignees||[]).map(uName)}))
+  };
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(r,null,2)],{type:'application/json'}));
+  a.download=`arka-${today()}.json`;a.click();toast('Downloaded!','ok');
+};
+
+// ── SEED ──
+window.doSeed=async function(logId,btnId){
+  const logEl=$(logId),btn=$(btnId);
+  logEl.style.display='block';logEl.innerHTML='';btn.disabled=true;btn.textContent='Seeding…';
+  function log(msg,t=''){const col=t==='ok'?'#137333':t==='err'?'#C5221F':'#74777F';logEl.innerHTML+=`<div style="color:${col}">${msg}</div>`;logEl.scrollTop=logEl.scrollHeight;}
+  const seeds=[{name:'Sarah Chen',email:'sarah.chen@arka.com',pwd:'sarah123',role:'manager'},{name:'Mike Patel',email:'mike.patel@arka.com',pwd:'mike123',role:'manager'},{name:'Alex Johnson',email:'alex.j@arka.com',pwd:'alex123',role:'member'},{name:'Priya Sharma',email:'priya.s@arka.com',pwd:'priya123',role:'member'},{name:'Rahul Verma',email:'rahul.v@arka.com',pwd:'rahul123',role:'member'},{name:'Emma Wilson',email:'emma.w@arka.com',pwd:'emma123',role:'member'},{name:'James Lee',email:'james.l@arka.com',pwd:'james123',role:'member'}];
+  const ids={};
+  for(const u of seeds){
+    try{
+      log(`Creating ${u.name}…`);
+      const sa=initializeApp(CFG,'seed_'+Date.now()+'_'+(secIdx++));
+      const sau=getAuth(sa);
+      const cr=await createUserWithEmailAndPassword(sau,u.email,u.pwd);
+      ids[u.email]=cr.user.uid;await signOut(sau);log(`✓ ${u.name}`,'ok');
+    }catch(e){
+      if(e.code==='auth/email-already-in-use'){log(`↩ ${u.email} exists`);const q2=query(collection(db,'users'),where('email','==',u.email));const s2=await getDocs(q2);if(!s2.empty)ids[u.email]=s2.docs[0].id;}
+      else log(`✗ ${u.name}: ${e.message}`,'err');
+    }
+  }
+  const m1=ids['sarah.chen@arka.com'],m2=ids['mike.patel@arka.com'];
+  for(const u of seeds){
+    const uid=ids[u.email];if(!uid)continue;
+    const mgr=u.role==='member'?(seeds.indexOf(u)%2===0?m1:m2):null;
+    try{await setDoc(doc(db,'users',uid),{name:u.name,email:u.email,role:u.role,manager_id:mgr||null,phone:'',department:'',bio:'',workspace_id:null,created_at:serverTimestamp()});}
+    catch(e){log(`✗ ${u.name}: ${e.message}`,'err');}
+  }
+  log('Profiles done ✓','ok');
+  const memIds=[ids['alex.j@arka.com'],ids['priya.s@arka.com'],ids['rahul.v@arka.com'],ids['emma.w@arka.com'],ids['james.l@arka.com']].filter(Boolean);
+  // Tasks with multi-user assignment
+  const taskData=[{title:'Redesign landing page',desc:'Update hero section, CTAs, mobile layout',priority:'high',status:'active'},{title:'Fix API rate limit bug',desc:'Returns 429 on burst logins',priority:'urgent',status:'pending'},{title:'Write auth unit tests',desc:'Cover all edge cases',priority:'normal',status:'done'},{title:'Update API documentation',desc:'Document all v2 endpoints',priority:'normal',status:'pending'},{title:'Implement dark mode',desc:'System pref + manual toggle',priority:'high',status:'active'},{title:'Database index review',desc:'Identify slow queries',priority:'urgent',status:'pending'},{title:'Set up CI/CD pipeline',desc:'GitHub Actions deployment',priority:'high',status:'done'},{title:'Customer onboarding flow',desc:'Email + in-app tour',priority:'normal',status:'active'}];
+  for(let i=0;i<taskData.length;i++){
+    const primaryAssignee=memIds[i%memIds.length];if(!primaryAssignee)continue;
+    const secondAssignee=memIds[(i+1)%memIds.length];
+    const assignees=[primaryAssignee,secondAssignee].filter((v,idx,arr)=>v&&arr.indexOf(v)===idx);
+    const au=allUsers.find(u=>u.id===primaryAssignee);
+    try{
+      await addDoc(collection(db,'tasks'),{title:taskData[i].title,description:taskData[i].desc,assignees,assigned_to:primaryAssignee,assigned_by:ME.id,manager_id:au?.manager_id||m1||null,status:taskData[i].status,priority:taskData[i].priority,due_date:null,workspace_id:CWS?CWS.id:'',created_at:serverTimestamp()});
+      log(`✓ Task: ${taskData[i].title}`,'ok');
+    }catch(e){log(`✗ ${e.message}`,'err');}
+  }
+  // Sample checklist items
+  if(memIds.length>0){
+    const clItems=[{title:'Update rates daily',desc:'Check and update all client rates in the CRM system'},{title:'Check automation status',desc:'Verify all automation workflows are running correctly'},{title:'Review daily reports',desc:'Check and acknowledge morning analytics reports'}];
+    for(const cl of clItems){
+      try{await addDoc(collection(db,'checklist_templates'),{title:cl.title,description:cl.desc,assignees:memIds.slice(0,3),created_by:ME.id,workspace_id:CWS?CWS.id:'',created_at:serverTimestamp()});log(`✓ Checklist: ${cl.title}`,'ok');}
+      catch(e){log(`✗ ${e.message}`,'err');}
+    }
+  }
+  log('');log('✅ Seeding complete!','ok');
+  log('  Manager: sarah.chen@arka.com / sarah123','ok');
+  log('  Member:  alex.j@arka.com / alex123','ok');
+  btn.disabled=false;btn.textContent='Seed Again';
+  toast('Demo data seeded!','ok');
+};
+$('seedBtn').addEventListener('click',()=>doSeed('slog','seedBtn'));
+</script>
+</body>
+</html>
